@@ -1,0 +1,26 @@
+*.db
+!farm_survey_test.db
+*.csv
+*.spec
+*.zip
+build/
+dist/
+
+# macOS
+.DS_Store
+
+# Bloop
+.bsp
+
+# VS Code
+.vscode/
+
+# IDEA
+.idea
+.idea_modules
+/.worksheet/
+
+# Python
+venv/
+__pycache__/
+
