@@ -312,18 +312,18 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual(3, upload_to_s3.call_count)
         upload_calls = upload_to_s3.call_args_list
         self.assertEqual((name_to_kbs(blobs_in_container[0].name),
-                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg"),
+                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg"),
                          upload_calls[0].args)
         self.assertEqual((name_to_kbs(blobs_in_container[1].name),
-                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg"),
+                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/1a765470-ad91-4790-8706-11f78d30c6e1.jpg"),
                          upload_calls[1].args
                          )
         expected_metadata = {
             "files": [
                 {"checkSum": "6c319749b5a62079e4bbe7b49f333d79622e33899077b34397df613df5f96198", "format": "jpg",
-                 "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg", "originalName": "file1.tif", "size": 2},
+                 "name": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg", "originalName": "file1.tif", "size": 2},
                 {"checkSum": "95ca985f19c27633a48f52ec37fefd6c6998584698caa2e105ab761898a5496a", "format": "jpg",
-                 "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg", "originalName": "file2.tif", "size": 2}
+                 "name": "1a765470-ad91-4790-8706-11f78d30c6e1.jpg", "originalName": "file2.tif", "size": 2}
             ],
             "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72", "origination": "DigitalSurrogate", "totalSize": 4
         }

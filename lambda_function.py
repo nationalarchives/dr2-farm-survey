@@ -158,7 +158,7 @@ def lambda_handler(event, context):
                 container_client, blob_path
             )
             jpg_bytes = convert_to_jpg(tiff_blob_stream)
-            new_file_name = f"66/MAF/32/{file_id}.{new_file_extension}"
+            new_file_name = f"{file_id}.{new_file_extension}"
             upload_to_s3(jpg_bytes, f"files/{iaid}/{new_file_name}")
 
             file_size_kb = math.ceil(len(jpg_bytes) / 1000)
