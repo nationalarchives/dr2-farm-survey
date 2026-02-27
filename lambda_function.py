@@ -18,6 +18,7 @@ from natsort import natsorted
 
 file_id_key = "file_id"
 file_name_key = "file_name"
+sequence_no_key = "sequence_no"
 image_magick_loc = "/opt/bin/convert" if platform == "linux" else "/usr/local/bin/magick"
 new_file_extension = "jpg"
 
@@ -129,7 +130,7 @@ def lambda_handler(event, context):
         all_image_metadata_by_path = {}
         with sqlite3.connect(f"{batch_db_name}.db") as connection:
             for image_metadata in all_image_metadata:
-                file_name = image_metadata["file_name"]
+                file_name = image_metadata[file_name_key]
                 file_id = image_metadata[file_id_key]
 
                 blob_cursor = connection.cursor()
@@ -149,10 +150,11 @@ def lambda_handler(event, context):
             raise Exception(f"{len(file_ids_not_in_azure)} file(s) in the JSON were not found in Azure for IAID"
                             f" {iaid}. These are the file_ids: {", ".join(file_ids_not_in_azure)}")
 
-        replica_metadata_files = []
+        numbered_replica_file_metadata = {}
         for blob_path, image_metadata in all_image_metadata_by_path.items():
-            file_name = image_metadata["file_name"]
+            file_name = image_metadata[file_name_key]
             file_id = image_metadata[file_id_key]
+            sequence_no = image_metadata[sequence_no_key]
 
             tiff_blob_stream: StorageStreamDownloader[bytes] | StorageStreamDownloader[str] = get_azure_file_stream(
                 container_client, blob_path
@@ -165,20 +167,21 @@ def lambda_handler(event, context):
             sha256_hash = hashlib.sha256()
             sha256_hash.update(jpg_bytes)
 
-            replica_metadata_files.append({
+            numbered_replica_file_metadata[sequence_no] = {
                 "checkSum": sha256_hash.hexdigest(),
                 "format": new_file_extension,
                 "name": new_file_name,
                 "originalName": file_name,
                 "size": file_size_kb
-            })
+            }
 
-        sorted_replica_files = natsorted(replica_metadata_files, key=itemgetter(*["originalName"]))
+        numbered_replica_file_metadata_sorted = dict(sorted(numbered_replica_file_metadata.items()))
+        sorted_replica_file_metadata = list(numbered_replica_file_metadata_sorted.values())
         replica_metadata = {
-            "files": sorted_replica_files,
+            "files": sorted_replica_file_metadata,
             "replicaId": replica_id,
             "origination": asset_source,
-            "totalSize": sum(file["size"] for file in replica_metadata_files)
+            "totalSize": sum(file["size"] for file in sorted_replica_file_metadata)
         }
 
         metadata_bytes = json.dumps(replica_metadata).encode("utf-8")
