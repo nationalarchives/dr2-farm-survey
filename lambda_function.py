@@ -183,10 +183,3 @@ def lambda_handler(event, context):
 
         metadata_bytes = json.dumps(replica_metadata).encode("utf-8")
         upload_to_s3(metadata_bytes, f"metadata/{iaid}.json")
-
-
-if __name__ == "__main__":
-    lambda_handler(
-        {"Records": [{"body": """{"metadataLocation":"s3://farm-survey/image_map.json"}"""}]}, None)
-
-    {"Records": [{"body": "{\"metadataLocation\":\"s3://farm-survey/image_map.json\"}"}]}
