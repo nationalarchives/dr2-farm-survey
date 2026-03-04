@@ -6,7 +6,6 @@ import os
 import sqlite3
 from collections import Counter
 from itertools import groupby
-from operator import itemgetter
 from subprocess import Popen, PIPE
 from sys import platform
 from urllib.parse import urlparse
@@ -14,8 +13,8 @@ from urllib.parse import urlparse
 import boto3
 from azure.identity import ClientAssertionCredential
 from azure.storage.blob import StorageStreamDownloader, ContainerClient, BlobServiceClient
-from natsort import natsorted
 
+type StreamDownloader =  StorageStreamDownloader[bytes] | StorageStreamDownloader[str]
 file_id_key = "file_id"
 file_name_key = "file_name"
 sequence_no_key = "sequence_no"
@@ -87,12 +86,12 @@ def validate_metadata(all_image_metadata):
         raise Exception(f"""There are images with the same 'file_name':\n{"\n".join(ids)}""")
 
 
-def get_azure_file_stream(container_client: ContainerClient, blob_path: str) -> StorageStreamDownloader[str]:
+def get_azure_file_stream(container_client: ContainerClient, blob_path: str) -> StreamDownloader:
     blob_client = container_client.get_blob_client(blob_path)
     return blob_client.download_blob()
 
 
-def convert_to_jpg(tiff_stream: StorageStreamDownloader[bytes] | StorageStreamDownloader[str]) -> bytes:
+def convert_to_jpg(tiff_stream: StreamDownloader) -> bytes:
     process: Popen[bytes] = Popen(
         [image_magick_loc, "tiff:-", f"{new_file_extension}:-"], stdin=PIPE, stdout=PIPE, stderr=PIPE
     )
@@ -156,9 +155,7 @@ def lambda_handler(event, context):
             file_id = image_metadata[file_id_key]
             sequence_no = image_metadata[sequence_no_key]
 
-            tiff_blob_stream: StorageStreamDownloader[bytes] | StorageStreamDownloader[str] = get_azure_file_stream(
-                container_client, blob_path
-            )
+            tiff_blob_stream: StreamDownloader = get_azure_file_stream(container_client, blob_path)
             jpg_bytes = convert_to_jpg(tiff_blob_stream)
             new_file_name = f"{file_id}.{new_file_extension}"
             upload_to_s3(jpg_bytes, f"files/{iaid}/{new_file_name}")
