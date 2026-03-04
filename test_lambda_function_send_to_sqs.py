@@ -42,8 +42,6 @@ class TestLambdaFunction(unittest.TestCase):
     @patch("lambda_function_send_to_sqs.sqs_setup")
     def test_lambda_handler_should_get_the_file_objects_from_the_s3_bucket_and_send_them_to_sqs(self, sqs_setup,
                                                                                                 s3_setup):
-        s3_client = MagicMock()
-        sqs_client = MagicMock()
         list_jsons_in_bucket = MagicMock()
         list_jsons_in_bucket.return_value = [{"Key": "folder_name/an_s3_object.json"},
                                              {"Key": "folder_name/another_s3_object.json"}]
@@ -64,8 +62,6 @@ class TestLambdaFunction(unittest.TestCase):
     @patch("lambda_function_send_to_sqs.sqs_setup")
     def test_lambda_handler_should_get_the_objects_from_the_s3_but_not_send_them_to_sqs_if_there_are_not_files(
         self, sqs_setup, s3_setup):
-        s3_client = MagicMock()
-        sqs_client = MagicMock()
         list_jsons_in_bucket = MagicMock()
         list_jsons_in_bucket.return_value = [{"Key": "folder_name/"}, {"Key": "another_folder_name/"}]
         s3_setup.return_value = ("bucket1", list_jsons_in_bucket)

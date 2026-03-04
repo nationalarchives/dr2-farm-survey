@@ -135,7 +135,7 @@ def lambda_handler(event, context):
 
                 blob_cursor = connection.cursor()
                 blob_cursor.execute(
-                    f"""SELECT file_path FROM "{batch_db_name}" WHERE "{file_name_key}" = ?;""",
+                    f"SELECT file_path FROM {batch_db_name} WHERE {file_name_key} = ?;",
                     (file_name,)
                 )
                 blob_info = blob_cursor.fetchone()
@@ -164,11 +164,9 @@ def lambda_handler(event, context):
             upload_to_s3(jpg_bytes, f"files/{iaid}/{new_file_name}")
 
             file_size_kb = math.ceil(len(jpg_bytes) / 1000)
-            sha256_hash = hashlib.sha256()
-            sha256_hash.update(jpg_bytes)
 
             numbered_replica_file_metadata[sequence_no] = {
-                "checkSum": sha256_hash.hexdigest(),
+                "checkSum": hashlib.sha256(jpg_bytes).hexdigest(),
                 "format": new_file_extension,
                 "name": new_file_name,
                 "originalName": file_name,
