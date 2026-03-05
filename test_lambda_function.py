@@ -1,0 +1,429 @@
+import json
+import os
+import unittest
+from sys import platform
+from unittest.mock import patch, MagicMock
+
+import lambda_function
+
+image_magick_loc = "/opt/bin/convert" if platform == "linux" else "/usr/local/bin/magick"
+
+
+class BlobProperties:
+    def __init__(self, name, container):
+        self.name = name
+        self.container = container
+
+
+def call_arg(mock: MagicMock, count=0):
+    return mock.call_args_list[count].args[0]
+
+
+def call_kwarg(mock: MagicMock, param, count=0):
+    return mock.call_args_list[count].kwargs[param]
+
+
+blobs_in_container = [BlobProperties(f"file{n}.tif", "container1") for n in range(1, 5)]
+
+
+class StorageStreamDownloader:
+    def __init__(self, name):
+        self.name = name
+
+
+def name_to_kbs(name):
+    return bytes(name, "utf-8") * 200
+
+
+class TestLambdaFunction(unittest.TestCase):
+
+    @patch.dict(os.environ, {
+        "AZURE_ACCOUNT_URL": "test_account_url",
+        "AZURE_TENANT_ID": "test_tenant_id",
+        "AZURE_CLIENT_ID": "test_client_id",
+        "AZURE_FS_CONTAINER": "azure_container1"
+    }, clear=True)
+    @patch("lambda_function.ClientAssertionCredential")
+    @patch("lambda_function.BlobServiceClient")
+    def test_get_container_client_should_upload_file_bytes_to_correct_s3_bucket(self, blob_service_client,
+                                                                                client_assertion_credential):
+        client = MagicMock()
+        client.get_container_client.return_value = "container_client_response"
+        blob_service_client.return_value = client
+
+        container_client = lambda_function.get_container_client()
+
+        self.assertEqual("container_client_response", container_client)
+        self.assertEqual("test_client_id", call_kwarg(client_assertion_credential, "client_id"))
+        self.assertEqual("token_callback", call_kwarg(client_assertion_credential, "func").__name__)
+        self.assertEqual("test_tenant_id", call_kwarg(client_assertion_credential, "tenant_id"))
+
+        self.assertEqual("test_account_url", call_kwarg(blob_service_client, "account_url"))
+        self.assertEqual("ClientAssertionCredential()",
+                         call_kwarg(blob_service_client, "credential")._extract_mock_name())
+
+    @patch.dict(os.environ, {"AWS_FILES_BUCKET": "bucket1"}, clear=True)
+    @patch("lambda_function.boto3")
+    def test_upload_to_s3_should_upload_file_bytes_to_correct_s3_bucket(self, boto3):
+        boto3.return_value = MagicMock()
+        s3_client = MagicMock()
+        boto3.client.return_value = s3_client
+
+        client, upload_to_s3 = lambda_function.s3_setup()
+        upload_to_s3(b"bytesToWrite", "file_name")
+
+        self.assertEqual("s3", boto3.client.call_args.args[0])
+        self.assertEqual(s3_client, client)
+        self.assertEqual(b"bytesToWrite", s3_client.upload_fileobj.call_args.args[0].getvalue())
+        self.assertEqual(("bucket1", "file_name"), s3_client.upload_fileobj.call_args.args[1:])
+
+    def test_get_json_metadata_should_get_metadata_from_s3_and_return_it(self):
+        s3_client = MagicMock()
+        streaming_body = MagicMock()
+        reader = MagicMock()
+        streaming_body.read.return_value = reader
+        reader.decode.return_value = """{"IAID": "123", "images": [{"file_name": "file.tif"}]}"""
+
+        s3_client.get_object.return_value = {
+            "Body": streaming_body
+        }
+
+        json_metadata = lambda_function.get_json_metadata(s3_client, "bucket1", "key1")
+
+        self.assertEqual({"IAID": "123", "images": [{"file_name": "file.tif"}]}, json_metadata)
+        self.assertEqual(1, streaming_body.read.call_count)
+        self.assertEqual("utf-8", reader.decode.call_args.args[0])
+        self.assertEqual({"Bucket": "bucket1", "Key": "key1"}, s3_client.get_object.call_args.kwargs)
+
+    def test_validate_metadata_should_not_throw_any_exception_if_the_file_names_and_ids_are_unique(self):
+        images_metadata = [
+            {
+                "file_name": "file1.tif",
+                "file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7",
+                "sequence_no": 1
+            },
+            {
+                "file_name": "file2.tif",
+                "file_id": "1a765470-ad91-4790-8706-11f78d30c6e1",
+                "sequence_no": 2
+            },
+            {
+                "file_name": "blob3.tif",
+                "file_id": "6770380c-342b-455d-9f9e-aebd1574a242",
+                "sequence_no": 3
+            },
+            {
+                "file_name": "blob4.tif",
+                "file_id": "d10ae551-2bed-4d5e-83c9-f6a04924de21",
+                "sequence_no": 4
+            }
+        ]
+
+        lambda_function.validate_metadata(images_metadata)
+
+    def test_validate_metadata_should_throw_an_exception_if_there_are_images_with_same_id_in_json(self):
+        images_metadata = [
+            {
+                "file_name": "file1.tif",
+                "file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7",
+                "sequence_no": 1
+            },
+            {
+                "file_name": "file1.tif",
+                "file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7",
+                "sequence_no": 2
+            },
+            {
+                "file_name": "blob3.tif",
+                "file_id": "1a765470-ad91-4790-8706-11f78d30c6e1",
+                "sequence_no": 3
+            },
+            {
+                "file_name": "blob4.tif",
+                "file_id": "1a765470-ad91-4790-8706-11f78d30c6e1",
+                "sequence_no": 4
+            }
+        ]
+
+        with self.assertRaises(Exception) as context:
+            lambda_function.validate_metadata(images_metadata)
+
+        self.assertEqual(
+            "These image file_ids are duplicated in the metadata file: ed3744e6-9ff7-4bb3-9011-8b45356b6eb7, 1a765470-ad91-4790-8706-11f78d30c6e1",
+            context.exception.args[0])
+
+    def test_validate_metadata_should_throw_an_exception_if_there_are_images_with_same_name_in_json(self):
+        images_metadata = [
+            {
+                "file_name": "file1.tif",
+                "file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7",
+                "sequence_no": 1
+            },
+            {
+                "file_name": "file1.tif",
+                "file_id": "1a765470-ad91-4790-8706-11f78d30c6e1",
+                "sequence_no": 2
+            },
+            {
+                "file_name": "file2.tif",
+                "file_id": "6770380c-342b-455d-9f9e-aebd1574a242",
+                "sequence_no": 3
+            },
+            {
+                "file_name": "file2.tif",
+                "file_id": "d10ae551-2bed-4d5e-83c9-f6a04924de21",
+                "sequence_no": 4
+            }
+        ]
+
+        with self.assertRaises(Exception) as context:
+            lambda_function.validate_metadata(images_metadata)
+
+        self.assertEqual("There are images with the same 'file_name':" +
+                         "\n1. ed3744e6-9ff7-4bb3-9011-8b45356b6eb7, 1a765470-ad91-4790-8706-11f78d30c6e1" +
+                         "\n2. 6770380c-342b-455d-9f9e-aebd1574a242, d10ae551-2bed-4d5e-83c9-f6a04924de21",
+                         context.exception.args[0])
+
+    def test_get_azure_file_stream_should_get_blob_client_and_download_blob(self):
+        container_client = MagicMock()
+        blob_client = MagicMock()
+        blob_client.download_blob.return_value = {"name": "file1", "container": "test"}
+        container_client.get_blob_client.return_value = blob_client
+        file_stream = lambda_function.get_azure_file_stream(container_client, "file1")
+        self.assertEqual({"name": "file1", "container": "test"}, file_stream)
+        self.assertEqual(1, container_client.get_blob_client.call_count)
+        self.assertEqual("file1", container_client.get_blob_client.call_args[0][0])
+        self.assertEqual(1, blob_client.download_blob.call_count)
+
+    @patch("lambda_function.Popen")
+    def test_convert_to_jpg_should_return_jpg_bytes(self, popen):
+        process = MagicMock()
+        popen.return_value = process
+        process.communicate.return_value = (b"jpg_bytes", b"")
+        process.returncode = 0
+        tiff_stream = MagicMock()
+        tiff_stream.read.return_value = b"tiff_stream"
+
+        jpg_bytes = lambda_function.convert_to_jpg(tiff_stream)
+        self.assertEqual(b"jpg_bytes", jpg_bytes)
+        self.assertEqual([image_magick_loc, "tiff:-", "-resize", "25%", "jpg:-"], popen.call_args.args[0])
+        self.assertEqual({"stdin": -1, "stdout": -1, "stderr": -1}, popen.call_args.kwargs)
+        self.assertEqual({"input": b"tiff_stream"}, process.communicate.call_args.kwargs)
+        self.assertEqual(1, tiff_stream.read.call_count)
+
+    @patch("lambda_function.Popen")
+    def test_convert_to_jpg_should_throw_error_if_return_code_is_not_0(self, popen):
+        process = MagicMock()
+        popen.return_value = process
+        process.communicate.return_value = (b"jpg_bytes", b"Conversion Error")
+        process.returncode = 1
+        tiff_stream = MagicMock()
+        tiff_stream.read.return_value = b"tiff_stream"
+
+        with self.assertRaises(RuntimeError) as context:
+            lambda_function.convert_to_jpg(tiff_stream)
+
+        self.assertEqual("Conversion from TIFF to JPG failed: Conversion Error", context.exception.args[0])
+        self.assertEqual([image_magick_loc, "tiff:-", "-resize", "25%", "jpg:-"], popen.call_args.args[0])
+        self.assertEqual({"stdin": -1, "stdout": -1, "stderr": -1}, popen.call_args.kwargs)
+        self.assertEqual({"input": b"tiff_stream"}, process.communicate.call_args.kwargs)
+        self.assertEqual(1, tiff_stream.read.call_count)
+
+    @patch.dict(os.environ, {"IMAGE_MAGICK_LOC": "loc"}, clear=True)
+    @patch("lambda_function.boto3")
+    def test_token_callback_should_call_the_correct_sts_endpoint(self, boto3):
+        boto3.return_value = MagicMock()
+        sts_client = MagicMock()
+        sts_client.get_web_identity_token.return_value = {"WebIdentityToken": "test_token"}
+        boto3.client.return_value = sts_client
+
+        web_identity_token = lambda_function.token_callback()
+
+        self.assertEqual("test_token", web_identity_token)
+        self.assertEqual("sts", boto3.client.call_args.args[0])
+
+        self.assertEqual({
+            "Audience": ["api://AzureADTokenExchange"],
+            "DurationSeconds": 300,
+            "SigningAlgorithm": "RS256"
+        }, sts_client.get_web_identity_token.call_args.kwargs)
+
+    @patch.dict(os.environ, {"BATCH_DB_NAME": "farm_survey_test"}, clear=True)
+    @patch("lambda_function.token_callback")
+    @patch("lambda_function.get_container_client")
+    @patch("lambda_function.s3_setup")
+    @patch("lambda_function.get_json_metadata")
+    @patch("lambda_function.validate_metadata")
+    @patch("lambda_function.get_azure_file_stream")
+    @patch("lambda_function.convert_to_jpg")
+    def test_lambda_handler_should_upload_files_and_metadata_to_correct_s3_bucket(self, convert_to_jpg,
+                                                                                  get_azure_file_stream,
+                                                                                  validate_metadata, get_json_metadata,
+                                                                                  s3_setup, get_container_client,
+                                                                                  token_callback):
+        token_callback.return_value = "token_callback"
+        get_container_client.return_value = "container_client_response"
+
+        get_json_metadata.return_value = {
+            "IAID": "5de561ca-1795-452b-bee6-710e6f1e7f50",
+            "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72",
+            "images": [
+                {
+                    "file_name": "file2.tif",
+                    "file_id": "1a765470-ad91-4790-8706-11f78d30c6e1",
+                    "sequence_no": 2
+                },
+                {
+                    "file_name": "file4.tif",
+                    "file_id": "4ba95a7e-8dda-406a-b5af-77bc4e113a16",
+                    "sequence_no": 4
+                },
+                {
+                    "file_name": "file3.tif",
+                    "file_id": "8d383366-dca5-4390-b466-746eca5f72c5",
+                    "sequence_no": 3
+                },
+                {
+                    "file_name": "file1.tif",
+                    "file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7",
+                    "sequence_no": 1
+                }
+            ]
+        }
+
+        s3_client = MagicMock()
+        upload_to_s3 = MagicMock()
+        s3_setup.return_value = (s3_client, upload_to_s3)
+        get_azure_file_stream.side_effect = [StorageStreamDownloader(f"{blob.name} bytes") for blob in
+                                             blobs_in_container]
+
+        convert_to_jpg.side_effect = [name_to_kbs(blob.name) for blob in blobs_in_container]
+
+        lambda_function.lambda_handler(
+            {"Records": [{"body": """{"metadataLocation":"s3://my-bucket/images/image.json"}"""}]}, None)
+
+        self.assertEqual(1, s3_setup.call_count)
+        self.assertEqual(1, get_container_client.call_count)
+        self.assertEqual((s3_client, "my-bucket", "images/image.json"), get_json_metadata.call_args.args)
+        self.assertEqual(
+            ([
+                 {"file_id": "1a765470-ad91-4790-8706-11f78d30c6e1", "file_name": "file2.tif", "sequence_no": 2},
+                 {"file_id": "4ba95a7e-8dda-406a-b5af-77bc4e113a16", "file_name": "file4.tif", "sequence_no": 4},
+                 {"file_id": "8d383366-dca5-4390-b466-746eca5f72c5", "file_name": "file3.tif", "sequence_no": 3},
+                 {"file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7", "file_name": "file1.tif", "sequence_no": 1}
+             ],),
+            validate_metadata.call_args_list[0].args
+        )
+        self.assertEqual(("container_client_response", "folder1/folder1_1/file2.tif"),
+                         get_azure_file_stream.call_args_list[0].args)
+        self.assertEqual(("container_client_response", "folder1/folder1_1/file4.tif"),
+                         get_azure_file_stream.call_args_list[1].args)
+        self.assertEqual(("container_client_response", "folder1/folder1_1/file3.tif"),
+                         get_azure_file_stream.call_args_list[2].args)
+        self.assertEqual(("container_client_response", "folder1/folder1_1/file1.tif"),
+                         get_azure_file_stream.call_args_list[3].args)
+        self.assertEqual("file1.tif bytes", call_arg(convert_to_jpg).name)
+        self.assertEqual("file2.tif bytes", call_arg(convert_to_jpg, 1).name)
+        self.assertEqual("file3.tif bytes", call_arg(convert_to_jpg, 2).name)
+        self.assertEqual("file4.tif bytes", call_arg(convert_to_jpg, 3).name)
+
+        self.assertEqual(5, upload_to_s3.call_count)
+        upload_calls = upload_to_s3.call_args_list
+        self.assertEqual((name_to_kbs(blobs_in_container[0].name),
+                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/1a765470-ad91-4790-8706-11f78d30c6e1.jpg"),
+                         upload_calls[0].args)
+        self.assertEqual((name_to_kbs(blobs_in_container[1].name),
+                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg"),
+                         upload_calls[1].args
+                         )
+        self.assertEqual((name_to_kbs(blobs_in_container[2].name),
+                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/8d383366-dca5-4390-b466-746eca5f72c5.jpg"),
+                         upload_calls[2].args)
+        self.assertEqual((name_to_kbs(blobs_in_container[3].name),
+                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg"),
+                         upload_calls[3].args
+                         )
+        expected_metadata = {
+            "files": [
+                {"checkSum": "95f6f71ab879aecaa17545ec4b96bc77adad5a52901ba91fb66c6a0e99c7469f", "format": "jpg",
+                 "name": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg", "originalName": "file1.tif", "size": 2},
+                {"checkSum": "6c319749b5a62079e4bbe7b49f333d79622e33899077b34397df613df5f96198", "format": "jpg",
+                 "name": "1a765470-ad91-4790-8706-11f78d30c6e1.jpg", "originalName": "file2.tif", "size": 2},
+                {"checkSum": "e3dd291076cc2b1e5860b386aefd60ab36abbc92c9a76ce79bc128ccc1b8561e", "format": "jpg",
+                 "name": "8d383366-dca5-4390-b466-746eca5f72c5.jpg", "originalName": "file3.tif", "size": 2},
+                {"checkSum": "95ca985f19c27633a48f52ec37fefd6c6998584698caa2e105ab761898a5496a", "format": "jpg",
+                 "name": "4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg", "originalName": "file4.tif", "size": 2}
+            ],
+            "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72", "origination": "DigitalSurrogate", "totalSize": 8
+        }
+        self.assertEqual(
+            (json.dumps(expected_metadata).encode("utf-8"), "metadata/5de561ca-1795-452b-bee6-710e6f1e7f50.json"),
+            upload_calls[4].args
+        )
+
+    @patch.dict(os.environ, {"BATCH_DB_NAME": "farm_survey_test"}, clear=True)
+    @patch("lambda_function.token_callback")
+    @patch("lambda_function.get_container_client")
+    @patch("lambda_function.s3_setup")
+    @patch("lambda_function.get_json_metadata")
+    @patch("lambda_function.validate_metadata")
+    @patch("lambda_function.get_azure_file_stream")
+    @patch("lambda_function.convert_to_jpg")
+    def test_lambda_handler_should_skip_uploading_file_if_it_is_not_in_azure(self, convert_to_jpg,
+                                                                             get_azure_file_stream,
+                                                                             validate_metadata, get_json_metadata,
+                                                                             s3_setup, get_container_client,
+                                                                             token_callback):
+        token_callback.return_value = "token_callback"
+        get_container_client.return_value = "container_client"
+        get_json_metadata.return_value = {
+            "IAID": "5de561ca-1795-452b-bee6-710e6f1e7f50",
+            "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72",
+            "images": [
+                {
+                    "file_name": "file1.tif",
+                    "file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7",
+                    "sequence_no": 1
+                },
+                {
+                    "file_name": "file5.tif",
+                    "file_id": "1a765470-ad91-4790-8706-11f78d30c6e1",
+                    "sequence_no": 2
+                }
+            ]
+        }
+
+        validate_metadata.return_value = None
+        s3_client = MagicMock()
+        upload_to_s3 = MagicMock()
+        s3_setup.return_value = (s3_client, upload_to_s3)
+        get_azure_file_stream.side_effect = [StorageStreamDownloader(f"{blob.name} bytes") for blob in
+                                             blobs_in_container]
+
+        convert_to_jpg.side_effect = [name_to_kbs(blob.name) for blob in blobs_in_container]
+
+        with self.assertRaises(Exception) as context:
+            lambda_function.lambda_handler(
+                {"Records": [{"body": """{"metadataLocation":"s3://my-bucket/images/image.json"}"""}]}, None)
+
+        self.assertEqual(
+            "1 file(s) in the JSON were not found in Azure for IAID 5de561ca-1795-452b-bee6-710e6f1e7f50. "
+            "These are the file_ids: 1a765470-ad91-4790-8706-11f78d30c6e1",
+            context.exception.args[0])
+
+        self.assertEqual(1, s3_setup.call_count)
+        self.assertEqual(1, get_container_client.call_count)
+        self.assertEqual((s3_client, "my-bucket", "images/image.json"), get_json_metadata.call_args.args)
+        self.assertEqual(
+            ([{"file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7", "file_name": "file1.tif", "sequence_no": 1},
+              {"file_id": "1a765470-ad91-4790-8706-11f78d30c6e1", "file_name": "file5.tif", "sequence_no": 2}],),
+            validate_metadata.call_args_list[0].args
+        )
+        self.assertEqual([], get_azure_file_stream.call_args_list)
+        self.assertEqual([], convert_to_jpg.call_args_list)
+
+        self.assertEqual(0, upload_to_s3.call_count)
+
+
+if __name__ == '__main__':
+    unittest.main()

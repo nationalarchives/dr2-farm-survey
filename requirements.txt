@@ -1,0 +1,5 @@
+# Load all runtime and dev packages
+boto3
+azure.identity
+azure.storage.blob
+natsort
