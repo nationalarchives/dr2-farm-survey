@@ -14,13 +14,14 @@ import boto3
 from azure.identity import ClientAssertionCredential
 from azure.storage.blob import StorageStreamDownloader, ContainerClient, BlobServiceClient
 
-type StreamDownloader =  StorageStreamDownloader[bytes] | StorageStreamDownloader[str]
+type StreamDownloader = StorageStreamDownloader[bytes] | StorageStreamDownloader[str]
 file_id_key = "file_id"
 file_name_key = "file_name"
 sequence_no_key = "sequence_no"
 image_magick_loc = "/opt/bin/convert" if platform == "linux" else "/usr/local/bin/magick"
 new_file_extension = "jpg"
 jpg_reduction = "25%"
+
 
 def token_callback():
     sts_client = boto3.client("sts")
@@ -93,7 +94,8 @@ def get_azure_file_stream(container_client: ContainerClient, blob_path: str) -> 
 
 def convert_to_jpg(tiff_stream: StreamDownloader) -> bytes:
     process: Popen[bytes] = Popen(
-        [image_magick_loc, "tiff:-", "-resize", jpg_reduction, f"{new_file_extension}:-"], stdin=PIPE, stdout=PIPE, stderr=PIPE
+        [image_magick_loc, "tiff:-", "-resize", jpg_reduction, f"{new_file_extension}:-"], stdin=PIPE, stdout=PIPE,
+        stderr=PIPE
     )
     jpg_bytes, err = process.communicate(input=tiff_stream.read())
 

@@ -256,7 +256,8 @@ class TestLambdaFunction(unittest.TestCase):
     @patch("lambda_function.validate_metadata")
     @patch("lambda_function.get_azure_file_stream")
     @patch("lambda_function.convert_to_jpg")
-    def test_lambda_handler_should_upload_files_and_metadata_to_correct_s3_bucket(self, convert_to_jpg, get_azure_file_stream,
+    def test_lambda_handler_should_upload_files_and_metadata_to_correct_s3_bucket(self, convert_to_jpg,
+                                                                                  get_azure_file_stream,
                                                                                   validate_metadata, get_json_metadata,
                                                                                   s3_setup, get_container_client,
                                                                                   token_callback):
@@ -306,11 +307,11 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual((s3_client, "my-bucket", "images/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([
-                {"file_id": "1a765470-ad91-4790-8706-11f78d30c6e1", "file_name": "file2.tif", "sequence_no": 2},
-                {"file_id": "4ba95a7e-8dda-406a-b5af-77bc4e113a16", "file_name": "file4.tif", "sequence_no": 4},
-                {"file_id": "8d383366-dca5-4390-b466-746eca5f72c5", "file_name": "file3.tif", "sequence_no": 3},
-                {"file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7", "file_name": "file1.tif", "sequence_no": 1}
-                ],),
+                 {"file_id": "1a765470-ad91-4790-8706-11f78d30c6e1", "file_name": "file2.tif", "sequence_no": 2},
+                 {"file_id": "4ba95a7e-8dda-406a-b5af-77bc4e113a16", "file_name": "file4.tif", "sequence_no": 4},
+                 {"file_id": "8d383366-dca5-4390-b466-746eca5f72c5", "file_name": "file3.tif", "sequence_no": 3},
+                 {"file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7", "file_name": "file1.tif", "sequence_no": 1}
+             ],),
             validate_metadata.call_args_list[0].args
         )
         self.assertEqual(("container_client_response", "folder1/folder1_1/file2.tif"),
