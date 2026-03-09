@@ -20,7 +20,7 @@ file_name_key = "file_name"
 sequence_no_key = "sequence_no"
 image_magick_loc = "/opt/bin/convert" if platform == "linux" else "/usr/local/bin/magick"
 new_file_extension = "jpg"
-jpg_reduction = "25%"
+jpg_reduction = "33%"
 
 
 def token_callback():
@@ -63,7 +63,7 @@ def s3_setup():
 
 
 def get_json_metadata(s3_client, bucket, key):
-    response = s3_client.get_object(Bucket=bucket, Key=key)  # needs to be replaced with Azure?
+    response = s3_client.get_object(Bucket=bucket, Key=key)
     json_metadata = json.loads(response["Body"].read().decode("utf-8"))
     return json_metadata
 
