@@ -98,50 +98,50 @@ class TestLambdaFunction(unittest.TestCase):
     def test_validate_metadata_should_not_throw_any_exception_if_the_file_names_and_ids_are_unique(self):
         images_metadata = [
             {
-                "file_name": "file1.tif",
-                "file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7",
-                "sequence_no": 1
+                "format": "jpg",
+                "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                "originalName": "file1.tif"
             },
             {
-                "file_name": "file2.tif",
-                "file_id": "1a765470-ad91-4790-8706-11f78d30c6e1",
-                "sequence_no": 2
+                "format": "jpg",
+                "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                "originalName": "file2.tif"
             },
             {
-                "file_name": "blob3.tif",
-                "file_id": "6770380c-342b-455d-9f9e-aebd1574a242",
-                "sequence_no": 3
+                "format": "jpg",
+                "name": "66/MAF/32/6770380c-342b-455d-9f9e-aebd1574a242.jpg",
+                "originalName": "file3.tif"
             },
             {
-                "file_name": "blob4.tif",
-                "file_id": "d10ae551-2bed-4d5e-83c9-f6a04924de21",
-                "sequence_no": 4
+                "format": "jpg",
+                "name": "66/MAF/32/d10ae551-2bed-4d5e-83c9-f6a04924de21.jpg",
+                "originalName": "file4.tif"
             }
         ]
 
         lambda_function.validate_metadata(images_metadata)
 
-    def test_validate_metadata_should_throw_an_exception_if_there_are_images_with_same_id_in_json(self):
+    def test_validate_metadata_should_throw_an_exception_if_there_are_images_with_same_name_in_json(self):
         images_metadata = [
             {
-                "file_name": "file1.tif",
-                "file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7",
-                "sequence_no": 1
+                "format": "jpg",
+                "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                "originalName": "file1.tif"
             },
             {
-                "file_name": "file1.tif",
-                "file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7",
-                "sequence_no": 2
+                "format": "jpg",
+                "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                "originalName": "file2.tif"
             },
             {
-                "file_name": "blob3.tif",
-                "file_id": "1a765470-ad91-4790-8706-11f78d30c6e1",
-                "sequence_no": 3
+                "format": "jpg",
+                "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                "originalName": "file3.tif"
             },
             {
-                "file_name": "blob4.tif",
-                "file_id": "1a765470-ad91-4790-8706-11f78d30c6e1",
-                "sequence_no": 4
+                "format": "jpg",
+                "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                "originalName": "file4.tif"
             }
         ]
 
@@ -149,39 +149,40 @@ class TestLambdaFunction(unittest.TestCase):
             lambda_function.validate_metadata(images_metadata)
 
         self.assertEqual(
-            "These image file_ids are duplicated in the metadata file: ed3744e6-9ff7-4bb3-9011-8b45356b6eb7, 1a765470-ad91-4790-8706-11f78d30c6e1",
+            "These image names are duplicated in the replica's 'files' list: 66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg, "
+            "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
             context.exception.args[0])
 
-    def test_validate_metadata_should_throw_an_exception_if_there_are_images_with_same_name_in_json(self):
+    def test_validate_metadata_should_throw_an_exception_if_there_are_images_with_same_originalName_in_json(self):
         images_metadata = [
             {
-                "file_name": "file1.tif",
-                "file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7",
-                "sequence_no": 1
+                "format": "jpg",
+                "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                "originalName": "file1.tif"
             },
             {
-                "file_name": "file1.tif",
-                "file_id": "1a765470-ad91-4790-8706-11f78d30c6e1",
-                "sequence_no": 2
+                "format": "jpg",
+                "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                "originalName": "file1.tif"
             },
             {
-                "file_name": "file2.tif",
-                "file_id": "6770380c-342b-455d-9f9e-aebd1574a242",
-                "sequence_no": 3
+                "format": "jpg",
+                "name": "66/MAF/32/6770380c-342b-455d-9f9e-aebd1574a242.jpg",
+                "originalName": "file2.tif"
             },
             {
-                "file_name": "file2.tif",
-                "file_id": "d10ae551-2bed-4d5e-83c9-f6a04924de21",
-                "sequence_no": 4
+                "format": "jpg",
+                "name": "66/MAF/32/d10ae551-2bed-4d5e-83c9-f6a04924de21.jpg",
+                "originalName": "file2.tif"
             }
         ]
 
         with self.assertRaises(Exception) as context:
             lambda_function.validate_metadata(images_metadata)
 
-        self.assertEqual("There are images with the same 'file_name':" +
-                         "\n1. ed3744e6-9ff7-4bb3-9011-8b45356b6eb7, 1a765470-ad91-4790-8706-11f78d30c6e1" +
-                         "\n2. 6770380c-342b-455d-9f9e-aebd1574a242, d10ae551-2bed-4d5e-83c9-f6a04924de21",
+        self.assertEqual("There are images with the same 'originalName':" +
+                         "\n1. 66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg, 66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg" +
+                         "\n2. 66/MAF/32/6770380c-342b-455d-9f9e-aebd1574a242.jpg, 66/MAF/32/d10ae551-2bed-4d5e-83c9-f6a04924de21.jpg",
                          context.exception.args[0])
 
     def test_get_azure_file_stream_should_get_blob_client_and_download_blob(self):
@@ -265,30 +266,36 @@ class TestLambdaFunction(unittest.TestCase):
         get_container_client.return_value = "container_client_response"
 
         get_json_metadata.return_value = {
-            "IAID": "5de561ca-1795-452b-bee6-710e6f1e7f50",
-            "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72",
-            "images": [
-                {
-                    "file_name": "file2.tif",
-                    "file_id": "1a765470-ad91-4790-8706-11f78d30c6e1",
-                    "sequence_no": 2
-                },
-                {
-                    "file_name": "file4.tif",
-                    "file_id": "4ba95a7e-8dda-406a-b5af-77bc4e113a16",
-                    "sequence_no": 4
-                },
-                {
-                    "file_name": "file3.tif",
-                    "file_id": "8d383366-dca5-4390-b466-746eca5f72c5",
-                    "sequence_no": 3
-                },
-                {
-                    "file_name": "file1.tif",
-                    "file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7",
-                    "sequence_no": 1
-                }
-            ]
+            "record": {
+                "citableReference": "MAF 32/123/4/5",
+                "iaid": "5de561ca-1795-452b-bee6-710e6f1e7f50",
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
+            },
+            "replica": {
+                "files": [
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                        "originalName": "file1.tif"
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                        "originalName": "file2.tif"
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
+                        "originalName": "file3.tif"
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
+                        "originalName": "file4.tif"
+                    }
+                ],
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
+            }
         }
 
         s3_client = MagicMock()
@@ -307,20 +314,24 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual((s3_client, "my-bucket", "images/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([
-                 {"file_id": "1a765470-ad91-4790-8706-11f78d30c6e1", "file_name": "file2.tif", "sequence_no": 2},
-                 {"file_id": "4ba95a7e-8dda-406a-b5af-77bc4e113a16", "file_name": "file4.tif", "sequence_no": 4},
-                 {"file_id": "8d383366-dca5-4390-b466-746eca5f72c5", "file_name": "file3.tif", "sequence_no": 3},
-                 {"file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7", "file_name": "file1.tif", "sequence_no": 1}
+                 {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                  "originalName": "file1.tif"},
+                 {"format": "jpg", "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                  "originalName": "file2.tif"},
+                 {"format": "jpg", "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
+                  "originalName": "file3.tif"},
+                 {"format": "jpg", "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
+                  "originalName": "file4.tif"}
              ],),
             validate_metadata.call_args_list[0].args
         )
-        self.assertEqual(("container_client_response", "folder1/folder1_1/file2.tif"),
+        self.assertEqual(("container_client_response", "folder1/folder1_1/file1.tif"),
                          get_azure_file_stream.call_args_list[0].args)
-        self.assertEqual(("container_client_response", "folder1/folder1_1/file4.tif"),
+        self.assertEqual(("container_client_response", "folder1/folder1_1/file2.tif"),
                          get_azure_file_stream.call_args_list[1].args)
         self.assertEqual(("container_client_response", "folder1/folder1_1/file3.tif"),
                          get_azure_file_stream.call_args_list[2].args)
-        self.assertEqual(("container_client_response", "folder1/folder1_1/file1.tif"),
+        self.assertEqual(("container_client_response", "folder1/folder1_1/file4.tif"),
                          get_azure_file_stream.call_args_list[3].args)
         self.assertEqual("file1.tif bytes", call_arg(convert_to_jpg).name)
         self.assertEqual("file2.tif bytes", call_arg(convert_to_jpg, 1).name)
@@ -330,31 +341,33 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual(5, upload_to_s3.call_count)
         upload_calls = upload_to_s3.call_args_list
         self.assertEqual((name_to_kbs(blobs_in_container[0].name),
-                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/1a765470-ad91-4790-8706-11f78d30c6e1.jpg"),
+                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg"),
                          upload_calls[0].args)
         self.assertEqual((name_to_kbs(blobs_in_container[1].name),
-                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg"),
-                         upload_calls[1].args
-                         )
+                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg"),
+                         upload_calls[1].args)
         self.assertEqual((name_to_kbs(blobs_in_container[2].name),
-                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/8d383366-dca5-4390-b466-746eca5f72c5.jpg"),
+                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg"),
                          upload_calls[2].args)
         self.assertEqual((name_to_kbs(blobs_in_container[3].name),
-                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg"),
-                         upload_calls[3].args
-                         )
+                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg"),
+                         upload_calls[3].args)
         expected_metadata = {
-            "files": [
-                {"checkSum": "95f6f71ab879aecaa17545ec4b96bc77adad5a52901ba91fb66c6a0e99c7469f", "format": "jpg",
-                 "name": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg", "originalName": "file1.tif", "size": 2},
-                {"checkSum": "6c319749b5a62079e4bbe7b49f333d79622e33899077b34397df613df5f96198", "format": "jpg",
-                 "name": "1a765470-ad91-4790-8706-11f78d30c6e1.jpg", "originalName": "file2.tif", "size": 2},
-                {"checkSum": "e3dd291076cc2b1e5860b386aefd60ab36abbc92c9a76ce79bc128ccc1b8561e", "format": "jpg",
-                 "name": "8d383366-dca5-4390-b466-746eca5f72c5.jpg", "originalName": "file3.tif", "size": 2},
-                {"checkSum": "95ca985f19c27633a48f52ec37fefd6c6998584698caa2e105ab761898a5496a", "format": "jpg",
-                 "name": "4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg", "originalName": "file4.tif", "size": 2}
-            ],
-            "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72", "origination": "DigitalSurrogate", "totalSize": 8
+            "record": {
+                "citableReference": "MAF 32/123/4/5",
+                "iaid": "5de561ca-1795-452b-bee6-710e6f1e7f50",
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
+            },
+            "replica": {
+                "files": [
+                    {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg", "originalName": "file1.tif", "checkSum": "6c319749b5a62079e4bbe7b49f333d79622e33899077b34397df613df5f96198", "size": 2},
+                    {"format": "jpg", "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg", "originalName": "file2.tif", "checkSum": "95ca985f19c27633a48f52ec37fefd6c6998584698caa2e105ab761898a5496a", "size": 2},
+                    {"format": "jpg", "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg", "originalName": "file3.tif", "checkSum": "e3dd291076cc2b1e5860b386aefd60ab36abbc92c9a76ce79bc128ccc1b8561e", "size": 2},
+                    {"format": "jpg", "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg", "originalName": "file4.tif", "checkSum": "95f6f71ab879aecaa17545ec4b96bc77adad5a52901ba91fb66c6a0e99c7469f", "size": 2}
+                ],
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72",
+                "totalSize": 8
+            }
         }
         self.assertEqual(
             (json.dumps(expected_metadata).encode("utf-8"), "metadata/5de561ca-1795-452b-bee6-710e6f1e7f50.json"),
@@ -377,20 +390,24 @@ class TestLambdaFunction(unittest.TestCase):
         token_callback.return_value = "token_callback"
         get_container_client.return_value = "container_client"
         get_json_metadata.return_value = {
-            "IAID": "5de561ca-1795-452b-bee6-710e6f1e7f50",
-            "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72",
-            "images": [
-                {
-                    "file_name": "file1.tif",
-                    "file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7",
-                    "sequence_no": 1
-                },
-                {
-                    "file_name": "file5.tif",
-                    "file_id": "1a765470-ad91-4790-8706-11f78d30c6e1",
-                    "sequence_no": 2
-                }
-            ]
+            "record": {
+                "iaid": "5de561ca-1795-452b-bee6-710e6f1e7f50",
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
+            },
+            "replica": {
+                "files": [
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                        "originalName": "file1.tif"
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                        "originalName": "file5.tif"
+                    }
+                ]
+            }
         }
 
         validate_metadata.return_value = None
@@ -408,15 +425,18 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(
             "1 file(s) in the JSON were not found in Azure for IAID 5de561ca-1795-452b-bee6-710e6f1e7f50. "
-            "These are the file_ids: 1a765470-ad91-4790-8706-11f78d30c6e1",
+            "These are the names: 66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
             context.exception.args[0])
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
         self.assertEqual((s3_client, "my-bucket", "images/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
-            ([{"file_id": "ed3744e6-9ff7-4bb3-9011-8b45356b6eb7", "file_name": "file1.tif", "sequence_no": 1},
-              {"file_id": "1a765470-ad91-4790-8706-11f78d30c6e1", "file_name": "file5.tif", "sequence_no": 2}],),
+            ([{"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+               "originalName": "file1.tif"},
+              {"format": "jpg", "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+               "originalName": "file5.tif"}
+              ],),
             validate_metadata.call_args_list[0].args
         )
         self.assertEqual([], get_azure_file_stream.call_args_list)
