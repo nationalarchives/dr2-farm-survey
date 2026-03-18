@@ -7,11 +7,12 @@ import boto3
 def s3_setup():
     s3_client = boto3.client("s3")
     aws_files_bucket = os.environ["AWS_FILES_BUCKET"]
+    replica_jsons_folder = os.environ["REPLICA_JSONS_FOLDER"]
 
-    def list_jsons_in_bucket(prefix):
+    def list_jsons_in_bucket():
         response = s3_client.list_objects_v2(
             Bucket=aws_files_bucket,
-            Prefix=f"{prefix}/"
+            Prefix=f"{replica_jsons_folder}/"
         )
         return response["Contents"]
 
@@ -36,7 +37,7 @@ def lambda_handler(event, context):
     bucket, list_jsons_in_bucket = s3_setup()
     send_to_sqs = sqs_setup()
 
-    for object_info in list_jsons_in_bucket(prefix="original_replica_jsons"):
+    for object_info in list_jsons_in_bucket():
         key = object_info["Key"]
         if not key.endswith("/"):
             uri = f"s3://{bucket}/{object_info["Key"]}"

@@ -6,21 +6,21 @@ import lambda_function_send_to_sqs
 
 
 class TestLambdaFunction(unittest.TestCase):
-    @patch.dict(os.environ, {"AWS_FILES_BUCKET": "bucket1"}, clear=True)
+    @patch.dict(os.environ, {"AWS_FILES_BUCKET": "bucket1", "REPLICA_JSONS_FOLDER": "jsons_folder"}, clear=True)
     @patch("lambda_function_send_to_sqs.boto3")
     def test_list_jsons_in_bucket_should_retrieve_the_files_in_bucket(self, boto3):
         boto3.return_value = MagicMock()
         s3_client = MagicMock()
-        s3_client.list_objects_v2.return_value = {"Contents": ["folder_name/an_s3_object.json"]}
+        s3_client.list_objects_v2.return_value = {"Contents": ["jsons_folder/an_s3_object.json"]}
         boto3.client.return_value = s3_client
 
         aws_files_bucket, list_jsons_in_bucket = lambda_function_send_to_sqs.s3_setup()
-        response = list_jsons_in_bucket("folder_name")
+        response = list_jsons_in_bucket()
 
         self.assertEqual("bucket1", aws_files_bucket)
-        self.assertEqual(["folder_name/an_s3_object.json"], response)
+        self.assertEqual(["jsons_folder/an_s3_object.json"], response)
         self.assertEqual("s3", boto3.client.call_args.args[0])
-        self.assertEqual({"Bucket": "bucket1", "Prefix": "folder_name/"}, s3_client.list_objects_v2.call_args.kwargs)
+        self.assertEqual({"Bucket": "bucket1", "Prefix": "jsons_folder/"}, s3_client.list_objects_v2.call_args.kwargs)
 
     @patch.dict(os.environ, {"QUEUE_URL": "https://sqs.queueurl.com"}, clear=True)
     @patch("lambda_function_send_to_sqs.boto3")
