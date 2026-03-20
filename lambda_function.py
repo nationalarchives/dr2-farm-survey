@@ -5,6 +5,7 @@ import math
 import os
 import sqlite3
 from collections import Counter
+from contextlib import closing
 from itertools import groupby
 from subprocess import Popen, PIPE
 from sys import platform
@@ -15,9 +16,10 @@ from azure.identity import ClientAssertionCredential
 from azure.storage.blob import StorageStreamDownloader, ContainerClient, BlobServiceClient
 
 type StreamDownloader = StorageStreamDownloader[bytes] | StorageStreamDownloader[str]
-file_id_key = "file_id"
-file_name_key = "file_name"
-sequence_no_key = "sequence_no"
+name_key = "name"
+original_name_key = "originalName"
+files_key = "files"
+
 image_magick_loc = "/opt/bin/convert" if platform == "linux" else "/usr/local/bin/magick"
 new_file_extension = "jpg"
 jpg_reduction = "33%"
@@ -68,23 +70,26 @@ def get_json_metadata(s3_client, bucket, key):
     return json_metadata
 
 
-def validate_metadata(all_image_metadata):
-    metadata_grouped_by_name = {name: list(metadata) for name, metadata in
-                                groupby(all_image_metadata, lambda m: m[file_name_key])}
-    metadata_grouped_by_id = Counter(metadata[file_id_key] for metadata in all_image_metadata)
+def validate_metadata(all_image_metadata: list[dict[str, str]]):
+    metadata_grouped_by_orig_name = {name: list(metadata) for name, metadata in
+                                     groupby(all_image_metadata, lambda m: m[original_name_key])}
 
-    duplicate_ids = [fid for fid, count in metadata_grouped_by_id.items() if count > 1]
-    if len(duplicate_ids) > 0:
-        ids = ", ".join(duplicate_ids)
-        raise Exception(f"These image file_ids are duplicated in the metadata file: {ids}")
+    metadata_grouped_by_name = Counter(metadata[name_key] for metadata in all_image_metadata)
 
-    ids_of_files_with_same_name = [
-        ", ".join([image[file_id_key] for image in images_with_same_name])
-        for name, images_with_same_name in metadata_grouped_by_name.items() if len(images_with_same_name) > 1
+    duplicate_names = [name for name, count in metadata_grouped_by_name.items() if count > 1]
+
+    if len(duplicate_names) > 0:
+        names = ", ".join(duplicate_names)
+        raise Exception(f"These image {name_key}s are duplicated in the replica's 'files' list: {names}")
+
+    names_of_files_with_same_orig_name = [
+        ", ".join([image[name_key] for image in images_with_same_orig_name])
+        for _, images_with_same_orig_name in metadata_grouped_by_orig_name.items() if
+        len(images_with_same_orig_name) > 1
     ]
-    if len(ids_of_files_with_same_name) > 0:
-        ids = [f"{n}. {ids}" for n, ids in enumerate(ids_of_files_with_same_name, 1)]
-        raise Exception(f"""There are images with the same 'file_name':\n{"\n".join(ids)}""")
+    if len(names_of_files_with_same_orig_name) > 0:
+        names = [f"{n}. {names}" for n, names in enumerate(names_of_files_with_same_orig_name, 1)]
+        raise Exception(f"""There are images with the same '{original_name_key}':\n{"\n".join(names)}""")
 
 
 def get_azure_file_stream(container_client: ContainerClient, blob_path: str) -> StreamDownloader:
@@ -110,8 +115,6 @@ def lambda_handler(event, context):
 
     batch_db_name = os.environ["BATCH_DB_NAME"]
 
-    asset_source = "DigitalSurrogate"
-
     for record in event["Records"]:
         body: dict[str, str] = json.loads(record["body"])
         metadata_location = body["metadataLocation"]
@@ -120,66 +123,56 @@ def lambda_handler(event, context):
         key = metadata_uri.path[1:]
 
         json_metadata = get_json_metadata(s3_client, bucket, key)
-        all_image_metadata = json_metadata["images"]
-        iaid = json_metadata["IAID"]
-        replica_id = json_metadata["replicaId"]
+
+        record = json_metadata["record"]
+        replica = json_metadata["replica"]
+        all_image_metadata = replica[files_key]
+        iaid = record["iaid"]
 
         validate_metadata(all_image_metadata)
         print(f"Number of images belonging to IAID {iaid} in JSON:", len(all_image_metadata))
 
-        file_ids_not_in_azure = []
+        file_names_not_in_azure = []
         all_image_metadata_by_path = {}
-        with sqlite3.connect(f"{batch_db_name}.db") as connection:
-            for image_metadata in all_image_metadata:
-                file_name = image_metadata[file_name_key]
-                file_id = image_metadata[file_id_key]
+        with closing(sqlite3.connect(f"{batch_db_name}.db")) as connection:
+            with connection:
+                for image_metadata in all_image_metadata:
+                    original_name = image_metadata[original_name_key]
 
-                blob_cursor = connection.cursor()
-                blob_cursor.execute(
-                    f"SELECT file_path FROM {batch_db_name} WHERE {file_name_key} = ?;",
-                    (file_name,)
-                )
-                blob_info = blob_cursor.fetchone()
+                    blob_cursor = connection.cursor()
+                    blob_cursor.execute(
+                        f"SELECT filePath FROM {batch_db_name} WHERE {original_name_key} = ?;",
+                        (original_name,)
+                    )
+                    blob_info = blob_cursor.fetchone()
 
-                if not blob_info:
-                    file_ids_not_in_azure.append(file_id)
-                else:
-                    blob_path = blob_info[0]
-                    all_image_metadata_by_path[blob_path] = image_metadata
+                    if not blob_info:
+                        name = image_metadata[name_key]
+                        file_names_not_in_azure.append(name)
+                    else:
+                        blob_path = blob_info[0]
+                        all_image_metadata_by_path[blob_path] = image_metadata
 
-        if len(file_ids_not_in_azure) > 0:
-            raise Exception(f"{len(file_ids_not_in_azure)} file(s) in the JSON were not found in Azure for IAID"
-                            f" {iaid}. These are the file_ids: {", ".join(file_ids_not_in_azure)}")
+        if len(file_names_not_in_azure) > 0:
+            raise Exception(f"{len(file_names_not_in_azure)} file(s) in the JSON were not found in Azure for IAID"
+                            f" {iaid}. These are the names: {", ".join(file_names_not_in_azure)}")
 
-        numbered_replica_file_metadata = {}
+        images_metadata = []
         for blob_path, image_metadata in all_image_metadata_by_path.items():
-            file_name = image_metadata[file_name_key]
-            file_id = image_metadata[file_id_key]
-            sequence_no = image_metadata[sequence_no_key]
+            name = image_metadata[name_key]
 
             tiff_blob_stream: StreamDownloader = get_azure_file_stream(container_client, blob_path)
             jpg_bytes = convert_to_jpg(tiff_blob_stream)
-            new_file_name = f"{file_id}.{new_file_extension}"
-            upload_to_s3(jpg_bytes, f"files/{iaid}/{new_file_name}")
+            upload_to_s3(jpg_bytes, f"{files_key}/{iaid}/{name}")
 
             file_size_kb = math.ceil(len(jpg_bytes) / 1000)
 
-            numbered_replica_file_metadata[sequence_no] = {
-                "checkSum": hashlib.sha256(jpg_bytes).hexdigest(),
-                "format": new_file_extension,
-                "name": new_file_name,
-                "originalName": file_name,
-                "size": file_size_kb
-            }
+            images_metadata.append(
+                image_metadata | {"checkSum": hashlib.sha256(jpg_bytes).hexdigest(), "size": file_size_kb}
+            )
 
-        numbered_replica_file_metadata_sorted = dict(sorted(numbered_replica_file_metadata.items()))
-        sorted_replica_file_metadata = list(numbered_replica_file_metadata_sorted.values())
-        replica_metadata = {
-            "files": sorted_replica_file_metadata,
-            "replicaId": replica_id,
-            "origination": asset_source,
-            "totalSize": sum(file["size"] for file in sorted_replica_file_metadata)
-        }
+        replica[files_key] = images_metadata
+        replica["totalSize"] = sum(image_metadata["size"] for image_metadata in images_metadata)
 
-        metadata_bytes = json.dumps(replica_metadata).encode("utf-8")
+        metadata_bytes = json.dumps(json_metadata).encode("utf-8")
         upload_to_s3(metadata_bytes, f"metadata/{iaid}.json")
