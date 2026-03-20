@@ -5,6 +5,7 @@ import math
 import os
 import sqlite3
 from collections import Counter
+from contextlib import closing
 from itertools import groupby
 from subprocess import Popen, PIPE
 from sys import platform
@@ -133,23 +134,24 @@ def lambda_handler(event, context):
 
         file_names_not_in_azure = []
         all_image_metadata_by_path = {}
-        with sqlite3.connect(f"{batch_db_name}.db") as connection:
-            for image_metadata in all_image_metadata:
-                original_name = image_metadata[original_name_key]
+        with closing(sqlite3.connect(f"{batch_db_name}.db")) as connection:
+            with connection:
+                for image_metadata in all_image_metadata:
+                    original_name = image_metadata[original_name_key]
 
-                blob_cursor = connection.cursor()
-                blob_cursor.execute(
-                    f"SELECT filePath FROM {batch_db_name} WHERE {original_name_key} = ?;",
-                    (original_name,)
-                )
-                blob_info = blob_cursor.fetchone()
+                    blob_cursor = connection.cursor()
+                    blob_cursor.execute(
+                        f"SELECT filePath FROM {batch_db_name} WHERE {original_name_key} = ?;",
+                        (original_name,)
+                    )
+                    blob_info = blob_cursor.fetchone()
 
-                if not blob_info:
-                    name = image_metadata[name_key]
-                    file_names_not_in_azure.append(name)
-                else:
-                    blob_path = blob_info[0]
-                    all_image_metadata_by_path[blob_path] = image_metadata
+                    if not blob_info:
+                        name = image_metadata[name_key]
+                        file_names_not_in_azure.append(name)
+                    else:
+                        blob_path = blob_info[0]
+                        all_image_metadata_by_path[blob_path] = image_metadata
 
         if len(file_names_not_in_azure) > 0:
             raise Exception(f"{len(file_names_not_in_azure)} file(s) in the JSON were not found in Azure for IAID"
