@@ -55,11 +55,12 @@ def get_container_client():
 
 def s3_setup():
     s3_client = boto3.client("s3")
-    aws_files_bucket = os.environ["AWS_FILES_BUCKET"]
+    dest_files_bucket = os.environ["DEST_FILES_BUCKET"]
+    prefix = os.environ["DEST_BUCKET_PREFIX"]
 
     def upload_to_s3(bytes_to_write, file_name):
         body = io.BytesIO(bytes_to_write)
-        s3_client.upload_fileobj(body, aws_files_bucket, file_name)
+        s3_client.upload_fileobj(body, dest_files_bucket, f"{prefix}/{file_name}")
 
     return s3_client, upload_to_s3
 

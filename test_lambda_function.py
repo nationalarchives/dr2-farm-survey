@@ -62,7 +62,7 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual("ClientAssertionCredential()",
                          call_kwarg(blob_service_client, "credential")._extract_mock_name())
 
-    @patch.dict(os.environ, {"AWS_FILES_BUCKET": "bucket1"}, clear=True)
+    @patch.dict(os.environ, {"DEST_FILES_BUCKET": "bucket1", "DEST_BUCKET_PREFIX": "bucket_prefix"}, clear=True)
     @patch("lambda_function.boto3")
     def test_upload_to_s3_should_upload_file_bytes_to_correct_s3_bucket(self, boto3):
         boto3.return_value = MagicMock()
@@ -75,7 +75,7 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual("s3", boto3.client.call_args.args[0])
         self.assertEqual(s3_client, client)
         self.assertEqual(b"bytesToWrite", s3_client.upload_fileobj.call_args.args[0].getvalue())
-        self.assertEqual(("bucket1", "file_name"), s3_client.upload_fileobj.call_args.args[1:])
+        self.assertEqual(("bucket1", "bucket_prefix/file_name"), s3_client.upload_fileobj.call_args.args[1:])
 
     def test_get_json_metadata_should_get_metadata_from_s3_and_return_it(self):
         s3_client = MagicMock()
