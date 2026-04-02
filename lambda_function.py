@@ -22,7 +22,7 @@ files_key = "files"
 
 image_magick_loc = "/opt/bin/convert" if platform == "linux" else "/usr/local/bin/magick"
 new_file_extension = "jpg"
-jpg_reduction = "33%"
+jpg_reduction = "2500x1800"
 
 
 def token_callback():
