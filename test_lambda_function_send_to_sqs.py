@@ -6,21 +6,21 @@ import lambda_function_send_to_sqs
 
 
 class TestLambdaFunction(unittest.TestCase):
-    @patch.dict(os.environ, {"AWS_FILES_BUCKET": "bucket1", "REPLICA_JSONS_FOLDER": "jsons_folder"}, clear=True)
+    @patch.dict(os.environ, {"AWS_FILES_BUCKET": "bucket1"}, clear=True)
     @patch("lambda_function_send_to_sqs.boto3")
     def test_list_jsons_in_bucket_should_retrieve_the_files_in_bucket(self, boto3):
         boto3.return_value = MagicMock()
         s3_client = MagicMock()
-        s3_client.list_objects_v2.return_value = {"Contents": ["jsons_folder/an_s3_object.json"]}
+        s3_client.list_objects_v2.return_value = {"Contents": ["test_batch1/an_s3_object.json"]}
         boto3.client.return_value = s3_client
 
-        aws_files_bucket, list_jsons_in_bucket = lambda_function_send_to_sqs.s3_setup()
+        aws_files_bucket, list_jsons_in_bucket = lambda_function_send_to_sqs.s3_setup("test_batch1")
         response = list_jsons_in_bucket()
 
         self.assertEqual("bucket1", aws_files_bucket)
-        self.assertEqual(["jsons_folder/an_s3_object.json"], response)
+        self.assertEqual(["test_batch1/an_s3_object.json"], response)
         self.assertEqual("s3", boto3.client.call_args.args[0])
-        self.assertEqual({"Bucket": "bucket1", "Prefix": "jsons_folder/"}, s3_client.list_objects_v2.call_args.kwargs)
+        self.assertEqual({"Bucket": "bucket1", "Prefix": "test_batch1/"}, s3_client.list_objects_v2.call_args.kwargs)
 
     @patch.dict(os.environ, {"QUEUE_URL": "https://sqs.queueurl.com"}, clear=True)
     @patch("lambda_function_send_to_sqs.boto3")
@@ -31,12 +31,14 @@ class TestLambdaFunction(unittest.TestCase):
         boto3.client.return_value = sqs_client
 
         send_to_sqs = lambda_function_send_to_sqs.sqs_setup()
-        response = send_to_sqs({"metadataLocation": "https://folder_name/an_s3_object.json"})
+        response = send_to_sqs({"batchName": "test_batch1", "metadataLocation":
+            "https://folder_name/an_s3_object.json"})
 
         self.assertEqual({"Messages": []}, response)
         self.assertEqual("sqs", boto3.client.call_args.args[0])
-        self.assertEqual({"MessageBody": {"metadataLocation": "https://folder_name/an_s3_object.json"},
-                          "QueueUrl": "https://sqs.queueurl.com"}, sqs_client.send_message.call_args.kwargs)
+        self.assertEqual({"MessageBody": {"batchName": "test_batch1", "metadataLocation":
+            "https://folder_name/an_s3_object.json"}, "QueueUrl": "https://sqs.queueurl.com"},
+                         sqs_client.send_message.call_args.kwargs)
 
     @patch("lambda_function_send_to_sqs.s3_setup")
     @patch("lambda_function_send_to_sqs.sqs_setup")
@@ -50,12 +52,12 @@ class TestLambdaFunction(unittest.TestCase):
         send_to_sqs = MagicMock()
         sqs_setup.return_value = send_to_sqs
 
-        lambda_function_send_to_sqs.lambda_handler(None, None)
+        lambda_function_send_to_sqs.lambda_handler({"batchName": "test_batch1"}, None)
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, sqs_setup.call_count)
         self.assertEqual(2, send_to_sqs.call_count)
-        (self.assertEqual("""{"metadataLocation": "s3://bucket1/folder_name/another_s3_object.json"}""",
+        (self.assertEqual("""{"batchName": "test_batch1", "metadataLocation": "s3://bucket1/folder_name/another_s3_object.json"}""",
                           send_to_sqs.call_args.args[0]))
 
     @patch("lambda_function_send_to_sqs.s3_setup")
@@ -69,7 +71,7 @@ class TestLambdaFunction(unittest.TestCase):
         send_to_sqs = MagicMock()
         sqs_setup.return_value = send_to_sqs
 
-        lambda_function_send_to_sqs.lambda_handler(None, None)
+        lambda_function_send_to_sqs.lambda_handler({"batchName": "test_batch1"}, None)
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, sqs_setup.call_count)

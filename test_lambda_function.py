@@ -249,7 +249,7 @@ class TestLambdaFunction(unittest.TestCase):
             "SigningAlgorithm": "RS256"
         }, sts_client.get_web_identity_token.call_args.kwargs)
 
-    @patch.dict(os.environ, {"BATCH_DB_NAME": "farm_survey_test"}, clear=True)
+    @patch.dict(os.environ, clear=True)
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
@@ -307,7 +307,8 @@ class TestLambdaFunction(unittest.TestCase):
         convert_to_jpg.side_effect = [name_to_kbs(blob.name) for blob in blobs_in_container]
 
         lambda_function.lambda_handler(
-            {"Records": [{"body": """{"metadataLocation":"s3://my-bucket/images/image.json"}"""}]}, None)
+            {"Records": [{"body": """{"batchName": "farm_survey_test",
+            "metadataLocation":"s3://my-bucket/images/image.json"}"""}]}, None)
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
@@ -340,18 +341,15 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(5, upload_to_s3.call_count)
         upload_calls = upload_to_s3.call_args_list
+        s3_prefix = "farm_survey_test/files/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32"
         self.assertEqual((name_to_kbs(blobs_in_container[0].name),
-                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg"),
-                         upload_calls[0].args)
+                          f"{s3_prefix}/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg"), upload_calls[0].args)
         self.assertEqual((name_to_kbs(blobs_in_container[1].name),
-                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg"),
-                         upload_calls[1].args)
+                          f"{s3_prefix}/1a765470-ad91-4790-8706-11f78d30c6e1.jpg"), upload_calls[1].args)
         self.assertEqual((name_to_kbs(blobs_in_container[2].name),
-                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg"),
-                         upload_calls[2].args)
+                          f"{s3_prefix}/8d383366-dca5-4390-b466-746eca5f72c5.jpg"), upload_calls[2].args)
         self.assertEqual((name_to_kbs(blobs_in_container[3].name),
-                          "files/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg"),
-                         upload_calls[3].args)
+                          f"{s3_prefix}/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg"), upload_calls[3].args)
         expected_metadata = {
             "record": {
                 "citableReference": "MAF 32/123/4/5",
@@ -370,11 +368,12 @@ class TestLambdaFunction(unittest.TestCase):
             }
         }
         self.assertEqual(
-            (json.dumps(expected_metadata).encode("utf-8"), "metadata/5de561ca-1795-452b-bee6-710e6f1e7f50.json"),
+            (json.dumps(expected_metadata).encode("utf-8"),
+             "farm_survey_test/metadata/5de561ca-1795-452b-bee6-710e6f1e7f50.json"),
             upload_calls[4].args
         )
 
-    @patch.dict(os.environ, {"BATCH_DB_NAME": "farm_survey_test"}, clear=True)
+    @patch.dict(os.environ, clear=True)
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
@@ -421,7 +420,8 @@ class TestLambdaFunction(unittest.TestCase):
 
         with self.assertRaises(Exception) as context:
             lambda_function.lambda_handler(
-                {"Records": [{"body": """{"metadataLocation":"s3://my-bucket/images/image.json"}"""}]}, None)
+                {"Records": [{"body": """{"batchName": "farm_survey_test", "metadataLocation":"s3://my-bucket/images/image.json"}"""}]},
+                None)
 
         self.assertEqual(
             "1 file(s) in the JSON were not found in Azure for IAID 5de561ca-1795-452b-bee6-710e6f1e7f50. "
