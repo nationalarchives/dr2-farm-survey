@@ -207,7 +207,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         jpg_bytes = lambda_function.convert_to_jpg(tiff_stream)
         self.assertEqual(b"jpg_bytes", jpg_bytes)
-        self.assertEqual([image_magick_loc, "tiff:-", "-resize", "2500x1800", "jpg:-"], popen.call_args.args[0])
+        self.assertEqual([image_magick_loc, "tiff:-", "-resize", "33%", "jpg:-"], popen.call_args.args[0])
         self.assertEqual({"stdin": -1, "stdout": -1, "stderr": -1}, popen.call_args.kwargs)
         self.assertEqual({"input": b"tiff_stream"}, process.communicate.call_args.kwargs)
         self.assertEqual(1, tiff_stream.read.call_count)
@@ -225,7 +225,7 @@ class TestLambdaFunction(unittest.TestCase):
             lambda_function.convert_to_jpg(tiff_stream)
 
         self.assertEqual("Conversion from TIFF to JPG failed: Conversion Error", context.exception.args[0])
-        self.assertEqual([image_magick_loc, "tiff:-", "-resize", "2500x1800", "jpg:-"], popen.call_args.args[0])
+        self.assertEqual([image_magick_loc, "tiff:-", "-resize", "33%", "jpg:-"], popen.call_args.args[0])
         self.assertEqual({"stdin": -1, "stdout": -1, "stderr": -1}, popen.call_args.kwargs)
         self.assertEqual({"input": b"tiff_stream"}, process.communicate.call_args.kwargs)
         self.assertEqual(1, tiff_stream.read.call_count)

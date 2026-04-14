@@ -22,7 +22,9 @@ files_key = "files"
 
 image_magick_loc = "/opt/bin/convert" if platform == "linux" else "/usr/local/bin/magick"
 new_file_extension = "jpg"
-jpg_reduction = "2500x1800"
+processing_forms = True
+# This (line below) is basic until I get more information/confirmation on if I should go through with it
+jpg_reduction = "33%" if processing_forms else "2500x1800" # currently using this for maps
 
 
 def token_callback():
