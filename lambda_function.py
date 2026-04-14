@@ -55,11 +55,11 @@ def get_container_client():
 
 def s3_setup():
     s3_client = boto3.client("s3")
-    aws_files_bucket = os.environ["AWS_FILES_BUCKET"]
+    aws_bucket = os.environ["DEST_BUCKET"]
 
     def upload_to_s3(bytes_to_write, file_name):
         body = io.BytesIO(bytes_to_write)
-        s3_client.upload_fileobj(body, aws_files_bucket, file_name)
+        s3_client.upload_fileobj(body, aws_bucket, file_name)
 
     return s3_client, upload_to_s3
 
@@ -113,6 +113,9 @@ def lambda_handler(event, context):
     s3_client, upload_to_s3 = s3_setup()
     container_client = get_container_client()
 
+    files_prefix = os.environ["DEST_BUCKET_FILES_PREFIX"]
+    metadata_prefix = os.environ["DEST_BUCKET_RECORDS_PREFIX"]
+
     for record in event["Records"]:
         body: dict[str, str] = json.loads(record["body"])
         batch_db_name = body["batchName"]
@@ -162,7 +165,7 @@ def lambda_handler(event, context):
 
             tiff_blob_stream: StreamDownloader = get_azure_file_stream(container_client, blob_path)
             jpg_bytes = convert_to_jpg(tiff_blob_stream)
-            upload_to_s3(jpg_bytes, f"{files_key}/{iaid}/{name}")
+            upload_to_s3(jpg_bytes, f"{files_prefix}/{iaid}/{name}")
 
             file_size_kb = math.ceil(len(jpg_bytes) / 1000)
 
@@ -174,4 +177,4 @@ def lambda_handler(event, context):
         replica["totalSize"] = sum(image_metadata["size"] for image_metadata in images_metadata)
 
         metadata_bytes = json.dumps(json_metadata).encode("utf-8")
-        upload_to_s3(metadata_bytes, f"metadata/{iaid}.json")
+        upload_to_s3(metadata_bytes, f"{metadata_prefix}/{iaid}.json")

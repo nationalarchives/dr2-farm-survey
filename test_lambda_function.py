@@ -62,7 +62,8 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual("ClientAssertionCredential()",
                          call_kwarg(blob_service_client, "credential")._extract_mock_name())
 
-    @patch.dict(os.environ, {"AWS_FILES_BUCKET": "bucket1"}, clear=True)
+    @patch.dict(os.environ, {"DEST_BUCKET": "bucket1", "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+                             "DEST_BUCKET_RECORDS_PREFIX": "records_prefix"}, clear=True)
     @patch("lambda_function.boto3")
     def test_upload_to_s3_should_upload_file_bytes_to_correct_s3_bucket(self, boto3):
         boto3.return_value = MagicMock()
@@ -249,7 +250,8 @@ class TestLambdaFunction(unittest.TestCase):
             "SigningAlgorithm": "RS256"
         }, sts_client.get_web_identity_token.call_args.kwargs)
 
-    @patch.dict(os.environ, clear=True)
+    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
+        "records_prefix"}, clear=True)
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
@@ -341,7 +343,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(5, upload_to_s3.call_count)
         upload_calls = upload_to_s3.call_args_list
-        s3_prefix = "files/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32"
+        s3_prefix = "files_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32"
         self.assertEqual((name_to_kbs(blobs_in_container[0].name),
                           f"{s3_prefix}/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg"), upload_calls[0].args)
         self.assertEqual((name_to_kbs(blobs_in_container[1].name),
@@ -369,11 +371,12 @@ class TestLambdaFunction(unittest.TestCase):
         }
         self.assertEqual(
             (json.dumps(expected_metadata).encode("utf-8"),
-             "metadata/5de561ca-1795-452b-bee6-710e6f1e7f50.json"),
+             "records_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50.json"),
             upload_calls[4].args
         )
 
-    @patch.dict(os.environ, clear=True)
+    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX": "records_prefix"},
+                clear=True)
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
