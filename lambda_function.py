@@ -161,7 +161,7 @@ def lambda_handler(event, context):
 
         images_metadata = []
         for blob_path, image_metadata in all_image_metadata_by_path.items():
-            name = image_metadata[name_key]
+            name = image_metadata[name_key].split("/")[-1]
 
             tiff_blob_stream: StreamDownloader = get_azure_file_stream(container_client, blob_path)
             jpg_bytes = convert_to_jpg(tiff_blob_stream)

@@ -343,7 +343,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(5, upload_to_s3.call_count)
         upload_calls = upload_to_s3.call_args_list
-        s3_prefix = "files_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32"
+        s3_prefix = "files_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50"
         self.assertEqual((name_to_kbs(blobs_in_container[0].name),
                           f"{s3_prefix}/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg"), upload_calls[0].args)
         self.assertEqual((name_to_kbs(blobs_in_container[1].name),
