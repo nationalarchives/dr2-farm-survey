@@ -162,7 +162,7 @@ def lambda_handler(event, context):
 
             tiff_blob_stream: StreamDownloader = get_azure_file_stream(container_client, blob_path)
             jpg_bytes = convert_to_jpg(tiff_blob_stream)
-            upload_to_s3(jpg_bytes, f"{batch_db_name}/{files_key}/{iaid}/{name}")
+            upload_to_s3(jpg_bytes, f"{files_key}/{iaid}/{name}")
 
             file_size_kb = math.ceil(len(jpg_bytes) / 1000)
 
@@ -174,4 +174,4 @@ def lambda_handler(event, context):
         replica["totalSize"] = sum(image_metadata["size"] for image_metadata in images_metadata)
 
         metadata_bytes = json.dumps(json_metadata).encode("utf-8")
-        upload_to_s3(metadata_bytes, f"{batch_db_name}/metadata/{iaid}.json")
+        upload_to_s3(metadata_bytes, f"metadata/{iaid}.json")
