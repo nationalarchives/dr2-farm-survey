@@ -113,10 +113,9 @@ def lambda_handler(event, context):
     s3_client, upload_to_s3 = s3_setup()
     container_client = get_container_client()
 
-    batch_db_name = os.environ["BATCH_DB_NAME"]
-
     for record in event["Records"]:
         body: dict[str, str] = json.loads(record["body"])
+        batch_db_name = body["batchName"]
         metadata_location = body["metadataLocation"]
         metadata_uri = urlparse(metadata_location)
         bucket = metadata_uri.netloc

@@ -4,15 +4,15 @@ import os
 import boto3
 
 
-def s3_setup():
+def s3_setup(batch_name):
     s3_client = boto3.client("s3")
     aws_files_bucket = os.environ["AWS_FILES_BUCKET"]
-    replica_jsons_folder = os.environ["REPLICA_JSONS_FOLDER"]
+    replica_jsons_prefix = batch_name
 
     def list_jsons_in_bucket():
         response = s3_client.list_objects_v2(
             Bucket=aws_files_bucket,
-            Prefix=f"{replica_jsons_folder}/"
+            Prefix=f"{replica_jsons_prefix}/"
         )
         return response["Contents"]
 
@@ -34,12 +34,14 @@ def sqs_setup():
 
 
 def lambda_handler(event, context):
-    bucket, list_jsons_in_bucket = s3_setup()
+    batch_name_key = "batchName"
+    batch_name = event[batch_name_key]
+    bucket, list_jsons_in_bucket = s3_setup(batch_name)
     send_to_sqs = sqs_setup()
 
     for object_info in list_jsons_in_bucket():
         key = object_info["Key"]
         if not key.endswith("/"):
             uri = f"s3://{bucket}/{object_info["Key"]}"
-            message_body: str = json.dumps({"metadataLocation": uri})
+            message_body: str = json.dumps({batch_name_key: batch_name, "metadataLocation": uri})
             send_to_sqs(message_body)
