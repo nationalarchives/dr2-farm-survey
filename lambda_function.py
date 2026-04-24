@@ -19,6 +19,7 @@ type StreamDownloader = StorageStreamDownloader[bytes] | StorageStreamDownloader
 name_key = "name"
 original_name_key = "originalName"
 files_key = "files"
+update_scopes = {"RecordAndReplica", "RecordOnly"}
 
 image_magick_loc = "/opt/bin/convert" if platform == "linux" else "/usr/local/bin/magick"
 new_file_extension = "jpg"
@@ -55,11 +56,11 @@ def get_container_client():
 
 def s3_setup():
     s3_client = boto3.client("s3")
-    aws_files_bucket = os.environ["AWS_FILES_BUCKET"]
+    aws_bucket = os.environ["DEST_BUCKET"]
 
     def upload_to_s3(bytes_to_write, file_name):
         body = io.BytesIO(bytes_to_write)
-        s3_client.upload_fileobj(body, aws_files_bucket, file_name)
+        s3_client.upload_fileobj(body, aws_bucket, file_name)
 
     return s3_client, upload_to_s3
 
@@ -113,6 +114,9 @@ def lambda_handler(event, context):
     s3_client, upload_to_s3 = s3_setup()
     container_client = get_container_client()
 
+    files_prefix = os.environ["DEST_BUCKET_FILES_PREFIX"]
+    metadata_prefix = os.environ["DEST_BUCKET_RECORDS_PREFIX"]
+
     for record in event["Records"]:
         body: dict[str, str] = json.loads(record["body"])
         batch_db_name = body["batchName"]
@@ -131,47 +135,51 @@ def lambda_handler(event, context):
         validate_metadata(all_image_metadata)
         print(f"Number of images belonging to IAID {iaid} in JSON:", len(all_image_metadata))
 
-        file_names_not_in_azure = []
-        all_image_metadata_by_path = {}
-        with closing(sqlite3.connect(f"{batch_db_name}.db")) as connection:
-            with connection:
-                for image_metadata in all_image_metadata:
-                    original_name = image_metadata[original_name_key]
+        update_scope = json_metadata["updateScope"]
+        assert update_scope in update_scopes, (f"updateScope '{update_scope}' is not "
+                                               f"{" nor ".join(sorted(update_scopes))}")
+        if update_scope == "RecordAndReplica":
+            file_names_not_in_azure = []
+            all_image_metadata_by_path = {}
+            with closing(sqlite3.connect(f"{batch_db_name}.db")) as connection:
+                with connection:
+                    for image_metadata in all_image_metadata:
+                        original_name = image_metadata[original_name_key]
 
-                    blob_cursor = connection.cursor()
-                    blob_cursor.execute(
-                        f"SELECT filePath FROM {batch_db_name} WHERE {original_name_key} = ?;",
-                        (original_name,)
-                    )
-                    blob_info = blob_cursor.fetchone()
+                        blob_cursor = connection.cursor()
+                        blob_cursor.execute(
+                            f"SELECT filePath FROM {batch_db_name} WHERE {original_name_key} = ?;",
+                            (original_name,)
+                        )
+                        blob_info = blob_cursor.fetchone()
 
-                    if not blob_info:
-                        name = image_metadata[name_key]
-                        file_names_not_in_azure.append(name)
-                    else:
-                        blob_path = blob_info[0]
-                        all_image_metadata_by_path[blob_path] = image_metadata
+                        if not blob_info:
+                            name = image_metadata[name_key]
+                            file_names_not_in_azure.append(name)
+                        else:
+                            blob_path = blob_info[0]
+                            all_image_metadata_by_path[blob_path] = image_metadata
 
-        if len(file_names_not_in_azure) > 0:
-            raise Exception(f"{len(file_names_not_in_azure)} file(s) in the JSON were not found in Azure for IAID"
-                            f" {iaid}. These are the names: {", ".join(file_names_not_in_azure)}")
+            if len(file_names_not_in_azure) > 0:
+                raise Exception(f"{len(file_names_not_in_azure)} file(s) in the JSON were not found in Azure for IAID"
+                                f" {iaid}. These are the names: {", ".join(file_names_not_in_azure)}")
 
-        images_metadata = []
-        for blob_path, image_metadata in all_image_metadata_by_path.items():
-            name = image_metadata[name_key]
+            images_metadata = []
+            for blob_path, image_metadata in all_image_metadata_by_path.items():
+                name = image_metadata[name_key].split("/")[-1]
 
-            tiff_blob_stream: StreamDownloader = get_azure_file_stream(container_client, blob_path)
-            jpg_bytes = convert_to_jpg(tiff_blob_stream)
-            upload_to_s3(jpg_bytes, f"{files_key}/{iaid}/{name}")
+                tiff_blob_stream: StreamDownloader = get_azure_file_stream(container_client, blob_path)
+                jpg_bytes = convert_to_jpg(tiff_blob_stream)
+                upload_to_s3(jpg_bytes, f"{files_prefix}/{iaid}/{name}")
 
-            file_size_kb = math.ceil(len(jpg_bytes) / 1000)
+                file_size_kb = math.ceil(len(jpg_bytes) / 1000)
 
-            images_metadata.append(
-                image_metadata | {"checkSum": hashlib.sha256(jpg_bytes).hexdigest(), "size": file_size_kb}
-            )
+                images_metadata.append(
+                    image_metadata | {"checkSum": hashlib.sha256(jpg_bytes).hexdigest(), "size": file_size_kb}
+                )
 
-        replica[files_key] = images_metadata
-        replica["totalSize"] = sum(image_metadata["size"] for image_metadata in images_metadata)
+            replica[files_key] = images_metadata
+            replica["totalSize"] = sum(image_metadata["size"] for image_metadata in images_metadata)
 
         metadata_bytes = json.dumps(json_metadata).encode("utf-8")
-        upload_to_s3(metadata_bytes, f"metadata/{iaid}.json")
+        upload_to_s3(metadata_bytes, f"{metadata_prefix}/{iaid}.json")

@@ -62,7 +62,8 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual("ClientAssertionCredential()",
                          call_kwarg(blob_service_client, "credential")._extract_mock_name())
 
-    @patch.dict(os.environ, {"AWS_FILES_BUCKET": "bucket1"}, clear=True)
+    @patch.dict(os.environ, {"DEST_BUCKET": "bucket1", "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+                             "DEST_BUCKET_RECORDS_PREFIX": "records_prefix"}, clear=True)
     @patch("lambda_function.boto3")
     def test_upload_to_s3_should_upload_file_bytes_to_correct_s3_bucket(self, boto3):
         boto3.return_value = MagicMock()
@@ -249,7 +250,87 @@ class TestLambdaFunction(unittest.TestCase):
             "SigningAlgorithm": "RS256"
         }, sts_client.get_web_identity_token.call_args.kwargs)
 
-    @patch.dict(os.environ, clear=True)
+    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
+        "records_prefix"}, clear=True)
+    @patch("lambda_function.token_callback")
+    @patch("lambda_function.get_container_client")
+    @patch("lambda_function.s3_setup")
+    @patch("lambda_function.get_json_metadata")
+    @patch("lambda_function.validate_metadata")
+    def test_lambda_handler_should_throw_an_error_if_update_scope_provided_does_not_exist(self, validate_metadata,
+                                                                                          get_json_metadata, s3_setup,
+                                                                                          get_container_client,
+                                                                                          token_callback):
+        token_callback.return_value = "token_callback"
+        get_container_client.return_value = "container_client_response"
+
+        get_json_metadata.return_value = {
+            "record": {
+                "citableReference": "MAF 32/123/4/5",
+                "iaid": "5de561ca-1795-452b-bee6-710e6f1e7f50",
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
+            },
+            "replica": {
+                "files": [
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                        "originalName": "file1.tif"
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                        "originalName": "file2.tif"
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
+                        "originalName": "file3.tif"
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
+                        "originalName": "file4.tif"
+                    }
+                ],
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
+            },
+            "updateScope": "NonExistentUpdateScope"
+        }
+
+        s3_client = MagicMock()
+        upload_to_s3 = MagicMock()
+        s3_setup.return_value = (s3_client, upload_to_s3)
+
+        with self.assertRaises(Exception) as context:
+            lambda_function.lambda_handler(
+                {"Records": [{"body": """{"batchName": "farm_survey_test",
+                 "metadataLocation":"s3://my-bucket/images/image.json"}"""}]}, None)
+
+        self.assertEqual(
+            "updateScope 'NonExistentUpdateScope' is not RecordAndReplica nor RecordOnly",
+            context.exception.args[0]
+        )
+
+        self.assertEqual(1, s3_setup.call_count)
+        self.assertEqual(1, get_container_client.call_count)
+        self.assertEqual((s3_client, "my-bucket", "images/image.json"), get_json_metadata.call_args.args)
+        self.assertEqual(
+            ([
+                 {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                  "originalName": "file1.tif"},
+                 {"format": "jpg", "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                  "originalName": "file2.tif"},
+                 {"format": "jpg", "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
+                  "originalName": "file3.tif"},
+                 {"format": "jpg", "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
+                  "originalName": "file4.tif"}
+             ],),
+            validate_metadata.call_args_list[0].args
+        )
+
+    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
+        "records_prefix"}, clear=True)
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
@@ -295,7 +376,8 @@ class TestLambdaFunction(unittest.TestCase):
                     }
                 ],
                 "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
-            }
+            },
+            "updateScope": "RecordAndReplica"
         }
 
         s3_client = MagicMock()
@@ -341,7 +423,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(5, upload_to_s3.call_count)
         upload_calls = upload_to_s3.call_args_list
-        s3_prefix = "files/5de561ca-1795-452b-bee6-710e6f1e7f50/66/MAF/32"
+        s3_prefix = "files_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50"
         self.assertEqual((name_to_kbs(blobs_in_container[0].name),
                           f"{s3_prefix}/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg"), upload_calls[0].args)
         self.assertEqual((name_to_kbs(blobs_in_container[1].name),
@@ -358,22 +440,33 @@ class TestLambdaFunction(unittest.TestCase):
             },
             "replica": {
                 "files": [
-                    {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg", "originalName": "file1.tif", "checkSum": "6c319749b5a62079e4bbe7b49f333d79622e33899077b34397df613df5f96198", "size": 2},
-                    {"format": "jpg", "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg", "originalName": "file2.tif", "checkSum": "95ca985f19c27633a48f52ec37fefd6c6998584698caa2e105ab761898a5496a", "size": 2},
-                    {"format": "jpg", "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg", "originalName": "file3.tif", "checkSum": "e3dd291076cc2b1e5860b386aefd60ab36abbc92c9a76ce79bc128ccc1b8561e", "size": 2},
-                    {"format": "jpg", "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg", "originalName": "file4.tif", "checkSum": "95f6f71ab879aecaa17545ec4b96bc77adad5a52901ba91fb66c6a0e99c7469f", "size": 2}
+                    {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                     "originalName": "file1.tif",
+                     "checkSum": "6c319749b5a62079e4bbe7b49f333d79622e33899077b34397df613df5f96198", "size": 2},
+                    {"format": "jpg", "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                     "originalName": "file2.tif",
+                     "checkSum": "95ca985f19c27633a48f52ec37fefd6c6998584698caa2e105ab761898a5496a", "size": 2},
+                    {"format": "jpg", "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
+                     "originalName": "file3.tif",
+                     "checkSum": "e3dd291076cc2b1e5860b386aefd60ab36abbc92c9a76ce79bc128ccc1b8561e", "size": 2},
+                    {"format": "jpg", "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
+                     "originalName": "file4.tif",
+                     "checkSum": "95f6f71ab879aecaa17545ec4b96bc77adad5a52901ba91fb66c6a0e99c7469f", "size": 2}
                 ],
                 "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72",
                 "totalSize": 8
-            }
+            },
+            "updateScope": "RecordAndReplica"
         }
         self.assertEqual(
             (json.dumps(expected_metadata).encode("utf-8"),
-             "metadata/5de561ca-1795-452b-bee6-710e6f1e7f50.json"),
+             "records_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50.json"),
             upload_calls[4].args
         )
 
-    @patch.dict(os.environ, clear=True)
+    @patch.dict(os.environ,
+                {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX": "records_prefix"},
+                clear=True)
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
@@ -406,7 +499,8 @@ class TestLambdaFunction(unittest.TestCase):
                         "originalName": "file5.tif"
                     }
                 ]
-            }
+            },
+            "updateScope": "RecordAndReplica"
         }
 
         validate_metadata.return_value = None
@@ -420,7 +514,8 @@ class TestLambdaFunction(unittest.TestCase):
 
         with self.assertRaises(Exception) as context:
             lambda_function.lambda_handler(
-                {"Records": [{"body": """{"batchName": "farm_survey_test", "metadataLocation":"s3://my-bucket/images/image.json"}"""}]},
+                {"Records": [{
+                    "body": """{"batchName": "farm_survey_test", "metadataLocation":"s3://my-bucket/images/image.json"}"""}]},
                 None)
 
         self.assertEqual(
@@ -443,6 +538,110 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual([], convert_to_jpg.call_args_list)
 
         self.assertEqual(0, upload_to_s3.call_count)
+
+    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
+        "records_prefix"}, clear=True)
+    @patch("lambda_function.token_callback")
+    @patch("lambda_function.get_container_client")
+    @patch("lambda_function.s3_setup")
+    @patch("lambda_function.get_json_metadata")
+    @patch("lambda_function.validate_metadata")
+    def test_lambda_handler_should_only_upload_metadata_if_update_scope_is_record_only(self, validate_metadata,
+                                                                                       get_json_metadata, s3_setup,
+                                                                                       get_container_client,
+                                                                                       token_callback):
+        token_callback.return_value = "token_callback"
+        get_container_client.return_value = "container_client_response"
+
+        get_json_metadata.return_value = {
+            "record": {
+                "citableReference": "MAF 32/123/4/5",
+                "iaid": "5de561ca-1795-452b-bee6-710e6f1e7f50",
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
+            },
+            "replica": {
+                "files": [
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                        "originalName": "file1.tif"
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                        "originalName": "file2.tif"
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
+                        "originalName": "file3.tif"
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
+                        "originalName": "file4.tif"
+                    }
+                ],
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
+            },
+            "updateScope": "RecordOnly"
+        }
+
+        s3_client = MagicMock()
+        upload_to_s3 = MagicMock()
+        s3_setup.return_value = (s3_client, upload_to_s3)
+
+        lambda_function.lambda_handler(
+            {"Records": [{"body": """{"batchName": "farm_survey_test",
+             "metadataLocation":"s3://my-bucket/images/image.json"}"""}]}, None)
+
+        self.assertEqual(1, s3_setup.call_count)
+        self.assertEqual(1, get_container_client.call_count)
+        self.assertEqual((s3_client, "my-bucket", "images/image.json"), get_json_metadata.call_args.args)
+        self.assertEqual(
+            ([
+                 {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                  "originalName": "file1.tif"},
+                 {"format": "jpg", "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                  "originalName": "file2.tif"},
+                 {"format": "jpg", "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
+                  "originalName": "file3.tif"},
+                 {"format": "jpg", "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
+                  "originalName": "file4.tif"}
+             ],),
+            validate_metadata.call_args_list[0].args
+        )
+
+        self.assertEqual(1, upload_to_s3.call_count)
+        upload_calls = upload_to_s3.call_args_list
+        s3_prefix = "files_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50"
+
+        expected_metadata = {
+            "record": {
+                "citableReference": "MAF 32/123/4/5",
+                "iaid": "5de561ca-1795-452b-bee6-710e6f1e7f50",
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
+            },
+            "replica": {
+                "files": [
+                    {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                     "originalName": "file1.tif"},
+                    {"format": "jpg", "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                     "originalName": "file2.tif"},
+                    {"format": "jpg", "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
+                     "originalName": "file3.tif"},
+                    {"format": "jpg", "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
+                     "originalName": "file4.tif"}
+                ],
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
+            },
+            "updateScope": "RecordOnly"
+        }
+        self.assertEqual(
+            (json.dumps(expected_metadata).encode("utf-8"),
+             "records_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50.json"),
+            upload_calls[0].args
+        )
 
 
 if __name__ == '__main__':
