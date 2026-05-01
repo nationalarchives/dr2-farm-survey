@@ -2,6 +2,7 @@ import json
 import os
 
 import boto3
+from botocore.paginate import PageIterator
 
 
 def s3_setup(batch_name):
@@ -9,12 +10,10 @@ def s3_setup(batch_name):
     aws_files_bucket = os.environ["AWS_FILES_BUCKET"]
     replica_jsons_prefix = batch_name
 
-    def list_jsons_in_bucket():
-        response = s3_client.list_objects_v2(
-            Bucket=aws_files_bucket,
-            Prefix=f"{replica_jsons_prefix}/"
-        )
-        return response["Contents"]
+    def list_jsons_in_bucket() -> PageIterator:
+        paginator = s3_client.get_paginator("list_objects_v2")
+        iterator: PageIterator = paginator.paginate(Bucket=aws_files_bucket, Prefix=f"{replica_jsons_prefix}/")
+        return iterator
 
     return aws_files_bucket, list_jsons_in_bucket
 
@@ -39,9 +38,12 @@ def lambda_handler(event, context):
     bucket, list_jsons_in_bucket = s3_setup(batch_name)
     send_to_sqs = sqs_setup()
 
-    for object_info in list_jsons_in_bucket():
-        key = object_info["Key"]
-        if not key.endswith("/"):
-            uri = f"s3://{bucket}/{object_info["Key"]}"
-            message_body: str = json.dumps({batch_name_key: batch_name, "metadataLocation": uri})
-            send_to_sqs(message_body)
+    for page in list_jsons_in_bucket():
+        page_results: list[dict] = page["Contents"]
+        json_names = [result["Key"] for result in page_results]
+
+        for json_name in json_names:
+            if not json_name.endswith("/"):
+                uri = f"s3://{bucket}/{json_name}"
+                message_body: str = json.dumps({batch_name_key: batch_name, "metadataLocation": uri})
+                send_to_sqs(message_body)
