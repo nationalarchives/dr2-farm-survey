@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 import boto3
 from azure.identity import ClientAssertionCredential
 from azure.storage.blob import StorageStreamDownloader, ContainerClient, BlobServiceClient
+from validate_farm_survey_jsons import validate_json, load_json
 
 type StreamDownloader = StorageStreamDownloader[bytes] | StorageStreamDownloader[str]
 name_key = "name"
@@ -117,6 +118,8 @@ def lambda_handler(event, context):
     files_prefix = os.environ["DEST_BUCKET_FILES_PREFIX"]
     metadata_prefix = os.environ["DEST_BUCKET_RECORDS_PREFIX"]
 
+    json_schema_data = load_json("json_schema_for_metadata_jsons.json")
+
     for record in event["Records"]:
         body: dict[str, str] = json.loads(record["body"])
         batch_db_name = body["batchName"]
@@ -181,5 +184,8 @@ def lambda_handler(event, context):
             replica[files_key] = images_metadata
             replica["totalSize"] = sum(image_metadata["size"] for image_metadata in images_metadata)
 
+        error_message = validate_json(key, json_metadata, json_schema_data)
+        if error_message:
+            raise Exception(error_message)
         metadata_bytes = json.dumps(json_metadata).encode("utf-8")
         upload_to_s3(metadata_bytes, f"{metadata_prefix}/{iaid}.json")

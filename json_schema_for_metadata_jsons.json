@@ -1,0 +1,1038 @@
+{
+  "type": "object",
+  "properties": {
+    "record": {
+      "type": "object",
+      "properties": {
+        "iaid": {
+          "type": "string"
+        },
+        "replicaId": {
+          "type": [ "string", "null" ]
+        },
+        "citableReference": {
+          "type": "string"
+        },
+        "parentId": {
+          "type": "string"
+        },
+        "accumulationDates": {
+          "type": [ "string", "null" ]
+        },
+        "accruals": {
+          "type": [ "string", "null" ]
+        },
+        "accessConditions": {
+          "type": [ "string", "null" ]
+        },
+        "administrativeBackground": {
+          "type": [ "string", "null" ]
+        },
+        "appraisalInformation": {
+          "type": [ "string", "null" ]
+        },
+        "arrangement": {
+          "type": [ "string", "null" ]
+        },
+        "batchId": {
+          "type": [ "string", "null" ]
+        },
+        "refIaid": {
+          "type": [ "string", "null" ]
+        },
+        "catalogueId": {
+          "type": "integer"
+        },
+        "catalogueLevel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "coveringFromDate": {
+          "type": "integer"
+        },
+        "coveringToDate": {
+          "type": "integer"
+        },
+        "chargeType": {
+          "type": "integer"
+        },
+        "eDocumentId": {
+          "type": [ "string", "null" ]
+        },
+        "coveringDates": {
+          "type": [ "string", "null" ]
+        },
+        "custodialHistory": {
+          "type": [ "string", "null" ]
+        },
+        "closureCode": {
+          "type": [ "string", "null" ]
+        },
+        "closureStatus": {
+          "type": [ "string", "null" ]
+        },
+        "closureType": {
+          "type": [ "string", "null" ]
+        },
+        "recordOpeningDate": {
+          "type": [ "string", "null" ]
+        },
+        "corporateNames": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "xReferenceId": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceCode": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceName": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceType": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceURL": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceDescription": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceSortWord": {
+                "type": [ "string", "null" ]
+              },
+              "description": {
+                "type": [ "string", "null" ]
+              },
+              "preTitle": {
+                "type": [ "string", "null" ]
+              },
+              "title": {
+                "type": [ "string", "null" ]
+              },
+              "firstName": {
+                "type": [ "string", "null" ]
+              },
+              "surname": {
+                "type": [ "string", "null" ]
+              },
+              "startDate": {
+                "type": "integer"
+              },
+              "endDate": {
+                "type": "integer"
+              }
+            },
+            "required": []
+          }
+        },
+        "copiesInformation": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "xReferenceId": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceCode": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceName": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceType": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceURL": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceDescription": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceSortWord": {
+                "type": [ "string", "null" ]
+              },
+              "description": {
+                "type": [ "string", "null" ]
+              },
+              "preTitle": {
+                "type": [ "string", "null" ]
+              },
+              "title": {
+                "type": [ "string", "null" ]
+              },
+              "firstName": {
+                "type": [ "string", "null" ]
+              },
+              "surname": {
+                "type": [ "string", "null" ]
+              },
+              "startDate": {
+                "type": "integer"
+              },
+              "endDate": {
+                "type": "integer"
+              }
+            },
+            "required": []
+          }
+        },
+        "creatorName": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "xReferenceId": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceCode": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceName": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceType": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceURL": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceDescription": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceSortWord": {
+                "type": [ "string", "null" ]
+              },
+              "description": {
+                "type": [ "string", "null" ]
+              },
+              "preTitle": {
+                "type": [ "string", "null" ]
+              },
+              "title": {
+                "type": [ "string", "null" ]
+              },
+              "firstName": {
+                "type": [ "string", "null" ]
+              },
+              "surname": {
+                "type": [ "string", "null" ]
+              },
+              "startDate": {
+                "type": "integer"
+              },
+              "endDate": {
+                "type": "integer"
+              }
+            },
+            "required": []
+          }
+        },
+        "digitised": {
+          "type": "boolean"
+        },
+        "dimensions": {
+          "type": [ "string", "null" ]
+        },
+        "formerReferenceDep": {
+          "type": [ "string", "null" ]
+        },
+        "formerReferencePro": {
+          "type": [ "string", "null" ]
+        },
+        "heldBy": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "xReferenceId": {
+                "type": "string",
+                "enum": [ "A13530124" ]
+              },
+              "xReferenceCode": {
+                "type": "string",
+                "enum": [ "66" ]
+              },
+              "xReferenceName": {
+                "type": "string",
+                "enum": [ "The National Archives, Kew" ]
+              },
+              "xReferenceType": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceURL": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceDescription": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceSortWord": {
+                "type": [ "string", "null" ]
+              },
+              "description": {
+                "type": [ "string", "null" ]
+              },
+              "preTitle": {
+                "type": [ "string", "null" ]
+              },
+              "title": {
+                "type": [ "string", "null" ]
+              },
+              "firstName": {
+                "type": [ "string", "null" ]
+              },
+              "surname": {
+                "type": [ "string", "null" ]
+              },
+              "startDate": {
+                "type": "integer"
+              },
+              "endDate": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "xReferenceId",
+              "xReferenceCode",
+              "xReferenceName"
+            ]
+          }
+        },
+        "immediateSourceOfAcquisition": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "xReferenceId": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceCode": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceName": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceType": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceURL": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceDescription": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceSortWord": {
+                "type": [ "string", "null" ]
+              },
+              "description": {
+                "type": [ "string", "null" ]
+              },
+              "preTitle": {
+                "type": [ "string", "null" ]
+              },
+              "title": {
+                "type": [ "string", "null" ]
+              },
+              "firstName": {
+                "type": [ "string", "null" ]
+              },
+              "surname": {
+                "type": [ "string", "null" ]
+              },
+              "startDate": {
+                "type": "integer"
+              },
+              "endDate": {
+                "type": "integer"
+              }
+            },
+            "required": []
+          }
+        },
+        "language": {
+          "type": [ "string", "null" ]
+        },
+        "legalStatus": {
+          "type": [ "string", "null" ]
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "xReferenceId": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceCode": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceName": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceType": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceURL": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceDescription": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceSortWord": {
+                "type": [ "string", "null" ]
+              },
+              "description": {
+                "type": [ "string", "null" ]
+              },
+              "preTitle": {
+                "type": [ "string", "null" ]
+              },
+              "title": {
+                "type": [ "string", "null" ]
+              },
+              "firstName": {
+                "type": [ "string", "null" ]
+              },
+              "surname": {
+                "type": [ "string", "null" ]
+              },
+              "startDate": {
+                "type": "integer"
+              },
+              "endDate": {
+                "type": "integer"
+              }
+            },
+            "required": []
+          }
+        },
+        "locationOfOriginals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "xReferenceId": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceCode": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceName": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceType": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceURL": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceDescription": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceSortWord": {
+                "type": [ "string", "null" ]
+              },
+              "description": {
+                "type": [ "string", "null" ]
+              },
+              "preTitle": {
+                "type": [ "string", "null" ]
+              },
+              "title": {
+                "type": [ "string", "null" ]
+              },
+              "firstName": {
+                "type": [ "string", "null" ]
+              },
+              "surname": {
+                "type": [ "string", "null" ]
+              },
+              "startDate": {
+                "type": "integer"
+              },
+              "endDate": {
+                "type": "integer"
+              }
+            },
+            "required": []
+          }
+        },
+        "mapDesignation": {
+          "type": [ "string", "null" ]
+        },
+        "mapScaleNumber": {
+          "type": "integer"
+        },
+        "note": {
+          "type": [ "string", "null" ]
+        },
+        "people": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "preTitle": {
+                "type": [ "string", "null" ]
+              },
+              "title": {
+                "type": [ "string", "null" ]
+              },
+              "sortTitle": {
+                "type": [ "string", "null" ]
+              },
+              "forenames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "surname": {
+                "type": [ "string", "null" ]
+              },
+              "sortName": {
+                "type": [ "string", "null" ]
+              },
+              "epithet": {
+                "type": [ "string", "null" ]
+              },
+              "dateOfBirth": {
+                "type": "integer"
+              },
+              "dateOfDeath": {
+                "type": "integer"
+              },
+              "occupation": {
+                "type": "array",
+                "items": {
+                  "type": [ "string", "null" ]
+                }
+              }
+            },
+            "required": []
+          }
+        },
+        "physicalCondition": {
+          "type": [ "string", "null" ]
+        },
+        "physicalDescriptionExtent": {
+          "type": [ "string", "null" ]
+        },
+        "physicalDescriptionForm": {
+          "type": [ "string", "null" ]
+        },
+        "places": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": [ "string", "null" ]
+              },
+              "placeName": {
+                "type": [ "string", "null" ]
+              },
+              "parish": {
+                "type": [ "string", "null" ]
+              },
+              "townID": {
+                "type": "integer"
+              },
+              "town": {
+                "type": [ "string", "null" ]
+              },
+              "countyID": {
+                "type": "integer"
+              },
+              "county": {
+                "type": [ "string", "null" ]
+              },
+              "countryID": {
+                "type": "integer"
+              },
+              "country": {
+                "type": [ "string", "null" ]
+              },
+              "startDate": {
+                "type": "integer"
+              },
+              "endDate": {
+                "type": "integer"
+              },
+              "grid": {
+                "type": [ "string", "null" ]
+              },
+              "validation": {
+                "type": [ "string", "null" ]
+              },
+              "locationType": {
+                "type": [ "string", "null" ]
+              },
+              "regionID": {
+                "type": "integer"
+              },
+              "region": {
+                "type": [ "string", "null" ]
+              },
+              "oldCountyID": {
+                "type": "integer"
+              },
+              "oldCounty": {
+                "type": [ "string", "null" ]
+              },
+              "newCountyID": {
+                "type": "integer"
+              },
+              "newCounty": {
+                "type": [ "string", "null" ]
+              },
+              "displayName": {
+                "type": [ "string", "null" ]
+              }
+            },
+            "required": []
+          }
+        },
+        "referencePart": {
+          "type": "string"
+        },
+        "publicationNote": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "relatedMaterial": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "xReferenceId": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceCode": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceName": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceType": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceURL": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceDescription": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceSortWord": {
+                "type": [ "string", "null" ]
+              },
+              "description": {
+                "type": [ "string", "null" ]
+              },
+              "preTitle": {
+                "type": [ "string", "null" ]
+              },
+              "title": {
+                "type": [ "string", "null" ]
+              },
+              "firstName": {
+                "type": [ "string", "null" ]
+              },
+              "surname": {
+                "type": [ "string", "null" ]
+              },
+              "startDate": {
+                "type": "integer"
+              },
+              "endDate": {
+                "type": "integer"
+              }
+            },
+            "required": []
+          }
+        },
+        "separatedMaterial": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "xReferenceId": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceCode": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceName": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceType": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceURL": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceDescription": {
+                "type": [ "string", "null" ]
+              },
+              "xReferenceSortWord": {
+                "type": [ "string", "null" ]
+              },
+              "description": {
+                "type": [ "string", "null" ]
+              },
+              "preTitle": {
+                "type": [ "string", "null" ]
+              },
+              "title": {
+                "type": [ "string", "null" ]
+              },
+              "firstName": {
+                "type": [ "string", "null" ]
+              },
+              "surname": {
+                "type": [ "string", "null" ]
+              },
+              "startDate": {
+                "type": "integer"
+              },
+              "endDate": {
+                "type": "integer"
+              }
+            },
+            "required": []
+          }
+        },
+        "registryRecords": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "nraid": {
+                "type": "integer"
+              },
+              "registryRecordTitle": {
+                "type": [ "string", "null" ]
+              },
+              "roCollectionReference": {
+                "type": [ "string", "null" ]
+              },
+              "roAccessionNumber": {
+                "type": [ "string", "null" ]
+              },
+              "nraDetails": {
+                "type": [ "string", "null" ]
+              },
+              "otherReference": {
+                "type": [ "string", "null" ]
+              },
+              "isadgReference": {
+                "type": [ "string", "null" ]
+              },
+              "sortWord": {
+                "type": [ "string", "null" ]
+              },
+              "catalogueURL": {
+                "type": [ "string", "null" ]
+              },
+              "scannedLists": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "xReferenceId": {
+                      "type": [ "string", "null" ]
+                    },
+                    "xReferenceCode": {
+                      "type": [ "string", "null" ]
+                    },
+                    "xReferenceName": {
+                      "type": [ "string", "null" ]
+                    },
+                    "xReferenceType": {
+                      "type": [ "string", "null" ]
+                    },
+                    "xReferenceURL": {
+                      "type": [ "string", "null" ]
+                    },
+                    "xReferenceDescription": {
+                      "type": [ "string", "null" ]
+                    },
+                    "xReferenceSortWord": {
+                      "type": [ "string", "null" ]
+                    }
+                  },
+                  "required": []
+                }
+              }
+            },
+            "required": []
+          }
+        },
+        "restrictionsOnUse": {
+          "type": [ "string", "null" ]
+        },
+        "scopeContent": {
+          "type": "object",
+          "properties": {
+            "personNames": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "xReferenceId": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceCode": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceName": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceType": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceURL": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceDescription": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceSortWord": {
+                    "type": [ "string", "null" ]
+                  },
+                  "description": {
+                    "type": [ "string", "null" ]
+                  },
+                  "preTitle": {
+                    "type": [ "string", "null" ]
+                  },
+                  "title": {
+                    "type": [ "string", "null" ]
+                  },
+                  "firstName": {
+                    "type": [ "string", "null" ]
+                  },
+                  "surname": {
+                    "type": [ "string", "null" ]
+                  },
+                  "startDate": {
+                    "type": "integer"
+                  },
+                  "endDate": {
+                    "type": "integer"
+                  }
+                },
+                "required": []
+              }
+            },
+            "placeNames": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "xReferenceId": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceCode": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceName": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceType": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceURL": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceDescription": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceSortWord": {
+                    "type": [ "string", "null" ]
+                  },
+                  "description": {
+                    "type": [ "string", "null" ]
+                  },
+                  "preTitle": {
+                    "type": [ "string", "null" ]
+                  },
+                  "title": {
+                    "type": [ "string", "null" ]
+                  },
+                  "firstName": {
+                    "type": [ "string", "null" ]
+                  },
+                  "surname": {
+                    "type": [ "string", "null" ]
+                  },
+                  "startDate": {
+                    "type": "integer"
+                  },
+                  "endDate": {
+                    "type": "integer"
+                  }
+                },
+                "required": []
+              }
+            },
+            "referredToDate": {
+              "type": [ "string", "null" ]
+            },
+            "organizations": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "xReferenceId": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceCode": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceName": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceType": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceURL": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceDescription": {
+                    "type": [ "string", "null" ]
+                  },
+                  "xReferenceSortWord": {
+                    "type": [ "string", "null" ]
+                  },
+                  "description": {
+                    "type": [ "string", "null" ]
+                  },
+                  "preTitle": {
+                    "type": [ "string", "null" ]
+                  },
+                  "title": {
+                    "type": [ "string", "null" ]
+                  },
+                  "firstName": {
+                    "type": [ "string", "null" ]
+                  },
+                  "surname": {
+                    "type": [ "string", "null" ]
+                  },
+                  "startDate": {
+                    "type": "integer"
+                  },
+                  "endDate": {
+                    "type": "integer"
+                  }
+                },
+                "required": []
+              }
+            },
+            "description": {
+              "type": [ "string", "null" ]
+            },
+            "ephemera": {
+              "type": [ "string", "null" ]
+            },
+            "schema": {
+              "type": [ "string", "null" ]
+            }
+          },
+          "required": []
+        },
+        "sortKey": {
+          "type": [ "string", "null" ]
+        },
+        "source": {
+          "type": [ "string", "null" ]
+        },
+        "subjects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "title": {
+          "type": [ "string", "null" ]
+        },
+        "unpublishedFindingAids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [ "iaid", "catalogueLevel", "parentId", "referencePart", "citableReference", "heldBy" ]
+    },
+    "replica": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "checkSum": {
+                "type": [ "string", "null" ]
+              },
+              "format": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^66\\/.+\\.[^.\\s]+$"
+              },
+              "originalName": {
+                "type": [ "string", "null" ]
+              },
+              "size": {
+                "type": "integer"
+              }
+            },
+            "required": [ "format", "name", "size" ]
+          }
+        },
+        "replicaId": {
+          "type": "string"
+        },
+        "origination": {
+          "type": [ "string", "null" ],
+          "enum": [ "DigitalSurrogate", "Digitised", "BornDigital", null ]
+        },
+        "totalSize": {
+          "type": "integer"
+        }
+      },
+      "required": [ "replicaId", "files", "totalSize" ]
+    },
+    "updateScope": {
+      "type": "string",
+      "enum": [ "RecordOnly", "RecordAndReplica" ],
+      "description": "Defines whether the update applies only to the record or to both record and replica data."
+    }
+  },
+  "required": [ "record", "updateScope" ],
+  "if": {
+    "properties": {
+      "record": {
+        "properties": {
+          "replicaId": {
+            "type": "string",
+            "minLength": 5
+          }
+        },
+        "required": [ "replicaId" ]
+      }
+    }
+  },
+  "then": {
+    "required": [ "replica" ]
+  }
+}
