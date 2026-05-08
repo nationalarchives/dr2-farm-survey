@@ -157,15 +157,14 @@ def lambda_handler(event, context):
                         blob_info = blob_cursor.fetchone()
 
                         if not blob_info:
-                            name = image_metadata[name_key]
-                            file_names_not_in_azure.append(name)
+                            file_names_not_in_azure.append(original_name)
                         else:
                             blob_path = blob_info[0]
                             all_image_metadata_by_path[blob_path] = image_metadata
 
             if len(file_names_not_in_azure) > 0:
                 raise Exception(f"{len(file_names_not_in_azure)} file(s) in the JSON were not found in Azure for IAID"
-                                f" {iaid}. These are the names: {", ".join(file_names_not_in_azure)}")
+                                f" {iaid}. These are the originalNames: '{", ".join(file_names_not_in_azure)}'")
 
             images_metadata = []
             for blob_path, image_metadata in all_image_metadata_by_path.items():

@@ -520,7 +520,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(
             "1 file(s) in the JSON were not found in Azure for IAID 5de561ca-1795-452b-bee6-710e6f1e7f50. "
-            "These are the names: 66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+            "These are the originalNames: 'file5.tif'",
             context.exception.args[0])
 
         self.assertEqual(1, s3_setup.call_count)
