@@ -39,9 +39,9 @@ def validate_local_jsons(jsons_folder, schema_file):
                     error_messages.append(error_message)
 
     if error_messages:
-        print(f"\n{len(error_messages)} validation errors occurred:")
-    for n, error_message in enumerate(error_messages):
-        print(f"{n + 1}. {error_message}")
+        print(f"\n{len(error_messages)} validation error(s) occurred:")
+        for n, error_message in enumerate(error_messages):
+            print(f"{n + 1}. {error_message}")
         sys.exit(1)
 
 def main():
