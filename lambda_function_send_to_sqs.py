@@ -12,8 +12,7 @@ def s3_setup(batch_name):
 
     def list_jsons_in_bucket() -> PageIterator:
         paginator = s3_client.get_paginator("list_objects_v2")
-        iterator: PageIterator = paginator.paginate(Bucket=aws_files_bucket, Prefix=f"{replica_jsons_prefix}/")
-        return iterator
+        return paginator.paginate(Bucket=aws_files_bucket, Prefix=f"{replica_jsons_prefix}/")
 
     return aws_files_bucket, list_jsons_in_bucket
 
