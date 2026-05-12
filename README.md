@@ -83,5 +83,36 @@ The lambda doesn't return anything as it uploads the files to an S3 bucket
    7. Generates and SHA256 checksum
    8. Updates the `replica` section of the JSON with the file size and checksum for each file
    9. Totals the file sizes and updates `totalSize` key of `replica` object
-6. Upload the final metadata JSON object's bytes to a file in a different bucket in S3 with this path `"
+6. Validates the final metadata JSON object against Digital Services' JSON schema and throws an error if it violates 
+   the rules
+7. Upload the final metadata JSON object's bytes to a file in a different bucket in S3 with this path `"
 {metadata_prefix}/{iaid}.json"`
+
+## Validate Farm Survey JSONs
+
+This code is called by the "Convert Images from TIFF to JPEG" code but can also be run locally.
+
+### How to run locally
+
+This code takes a folder with JSONs in it as the 1st argument and the location to a JSON schema file as the 2nd.
+
+```
+python3 validate_farm_survey_jsons.py <json_folder> <schema_file>
+```
+
+### How to use as a module
+
+Two methods can  be called; for multiple JSONs
+```
+validate_local_jsons(jsons_folder, schema_file)
+```
+
+or for one JSON
+
+```
+validate_json(json_file_name, json_as_dict, schema_as_a_dict)
+```
+
+### Output
+
+There is nothing returned from this code, only error messages (if there are any) and progress indicators.

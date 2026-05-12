@@ -8,6 +8,21 @@ import lambda_function
 
 image_magick_loc = "/opt/bin/convert" if platform == "linux" else "/usr/local/bin/magick"
 
+required_records_fields = {
+    "iaid": "5de561ca-1795-452b-bee6-710e6f1e7f50",
+    "citableReference": "MAF 98/123/44/5",
+    "parentId": "A7654321",
+    "catalogueLevel": 8,
+    "referencePart": "0",
+    "heldBy": [
+        {
+            "xReferenceId": "A13530124",
+            "xReferenceCode": "66",
+            "xReferenceName": "The National Archives, Kew"
+        }
+    ],
+}
+
 
 class BlobProperties:
     def __init__(self, name, container):
@@ -265,11 +280,7 @@ class TestLambdaFunction(unittest.TestCase):
         get_container_client.return_value = "container_client_response"
 
         get_json_metadata.return_value = {
-            "record": {
-                "citableReference": "MAF 32/123/4/5",
-                "iaid": "5de561ca-1795-452b-bee6-710e6f1e7f50",
-                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
-            },
+            "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
             "replica": {
                 "files": [
                     {
@@ -347,11 +358,7 @@ class TestLambdaFunction(unittest.TestCase):
         get_container_client.return_value = "container_client_response"
 
         get_json_metadata.return_value = {
-            "record": {
-                "citableReference": "MAF 32/123/4/5",
-                "iaid": "5de561ca-1795-452b-bee6-710e6f1e7f50",
-                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
-            },
+            "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
             "replica": {
                 "files": [
                     {
@@ -433,11 +440,7 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual((name_to_kbs(blobs_in_container[3].name),
                           f"{s3_prefix}/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg"), upload_calls[3].args)
         expected_metadata = {
-            "record": {
-                "citableReference": "MAF 32/123/4/5",
-                "iaid": "5de561ca-1795-452b-bee6-710e6f1e7f50",
-                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
-            },
+            "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
             "replica": {
                 "files": [
                     {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
@@ -482,10 +485,7 @@ class TestLambdaFunction(unittest.TestCase):
         token_callback.return_value = "token_callback"
         get_container_client.return_value = "container_client"
         get_json_metadata.return_value = {
-            "record": {
-                "iaid": "5de561ca-1795-452b-bee6-710e6f1e7f50",
-                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
-            },
+            "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
             "replica": {
                 "files": [
                     {
@@ -520,7 +520,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(
             "1 file(s) in the JSON were not found in Azure for IAID 5de561ca-1795-452b-bee6-710e6f1e7f50. "
-            "These are the names: 66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+            "These are the originalNames: 'file5.tif'",
             context.exception.args[0])
 
         self.assertEqual(1, s3_setup.call_count)
@@ -554,35 +554,36 @@ class TestLambdaFunction(unittest.TestCase):
         get_container_client.return_value = "container_client_response"
 
         get_json_metadata.return_value = {
-            "record": {
-                "citableReference": "MAF 32/123/4/5",
-                "iaid": "5de561ca-1795-452b-bee6-710e6f1e7f50",
-                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
-            },
+            "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
             "replica": {
                 "files": [
                     {
                         "format": "jpg",
                         "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
-                        "originalName": "file1.tif"
+                        "originalName": "file1.tif",
+                        "size": 25
                     },
                     {
                         "format": "jpg",
                         "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
-                        "originalName": "file2.tif"
+                        "originalName": "file2.tif",
+                        "size": 25
                     },
                     {
                         "format": "jpg",
                         "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
-                        "originalName": "file3.tif"
+                        "originalName": "file3.tif",
+                        "size": 25
                     },
                     {
                         "format": "jpg",
                         "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
-                        "originalName": "file4.tif"
+                        "originalName": "file4.tif",
+                        "size": 25
                     }
                 ],
-                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72",
+                "totalSize": 100
             },
             "updateScope": "RecordOnly"
         }
@@ -601,13 +602,13 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual(
             ([
                  {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
-                  "originalName": "file1.tif"},
+                  "originalName": "file1.tif", "size": 25},
                  {"format": "jpg", "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
-                  "originalName": "file2.tif"},
+                  "originalName": "file2.tif", "size": 25},
                  {"format": "jpg", "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
-                  "originalName": "file3.tif"},
+                  "originalName": "file3.tif", "size": 25},
                  {"format": "jpg", "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
-                  "originalName": "file4.tif"}
+                  "originalName": "file4.tif", "size": 25}
              ],),
             validate_metadata.call_args_list[0].args
         )
@@ -617,23 +618,20 @@ class TestLambdaFunction(unittest.TestCase):
         s3_prefix = "files_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50"
 
         expected_metadata = {
-            "record": {
-                "citableReference": "MAF 32/123/4/5",
-                "iaid": "5de561ca-1795-452b-bee6-710e6f1e7f50",
-                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
-            },
+            "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
             "replica": {
                 "files": [
                     {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
-                     "originalName": "file1.tif"},
+                     "originalName": "file1.tif", "size": 25},
                     {"format": "jpg", "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
-                     "originalName": "file2.tif"},
+                     "originalName": "file2.tif", "size": 25},
                     {"format": "jpg", "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
-                     "originalName": "file3.tif"},
+                     "originalName": "file3.tif", "size": 25},
                     {"format": "jpg", "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
-                     "originalName": "file4.tif"}
+                     "originalName": "file4.tif", "size": 25}
                 ],
-                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72",
+                "totalSize": 100
             },
             "updateScope": "RecordOnly"
         }
@@ -641,6 +639,57 @@ class TestLambdaFunction(unittest.TestCase):
             (json.dumps(expected_metadata).encode("utf-8"),
              "records_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50.json"),
             upload_calls[0].args
+        )
+
+    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
+        "records_prefix"}, clear=True)
+    @patch("lambda_function.token_callback")
+    @patch("lambda_function.get_container_client")
+    @patch("lambda_function.s3_setup")
+    @patch("lambda_function.get_json_metadata")
+    @patch("lambda_function.validate_metadata")
+    def test_lambda_handler_should_throw_an_error_if_metadata_json_does_not_match_schema(self, validate_metadata,
+                                                                                         get_json_metadata, s3_setup,
+                                                                                         get_container_client,
+                                                                                         token_callback):
+        token_callback.return_value = "token_callback"
+        get_container_client.return_value = "container_client_response"
+
+        get_json_metadata.return_value = {
+            "record": {
+                **required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
+                "iaid": 1111,
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
+            },
+            "replica": {
+                "files": [
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                        "originalName": "file1.tif",
+                        "size": 25
+                    }
+                ],
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72",
+                "totalSize": 25
+            },
+            "updateScope": "RecordOnly"
+        }
+
+        s3_client = MagicMock()
+        upload_to_s3 = MagicMock()
+        s3_setup.return_value = (s3_client, upload_to_s3)
+
+        with self.assertRaises(Exception) as context:
+            lambda_function.lambda_handler(
+                {"Records": [{"body": """{"batchName": "farm_survey_test",
+             "metadataLocation":"s3://my-bucket/images/image.json"}"""}]}, None
+            )
+
+        self.assertEqual(
+            "\nJSON validation returned an error for file 'images/image.json' at path: record/iaid:\n  - 1111 is " +
+            "not of type 'string'",
+            context.exception.args[0]
         )
 
 

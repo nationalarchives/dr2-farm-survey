@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 import boto3
 from azure.identity import ClientAssertionCredential
 from azure.storage.blob import StorageStreamDownloader, ContainerClient, BlobServiceClient
+from validate_farm_survey_jsons import validate_json, load_json
 
 type StreamDownloader = StorageStreamDownloader[bytes] | StorageStreamDownloader[str]
 name_key = "name"
@@ -117,6 +118,8 @@ def lambda_handler(event, context):
     files_prefix = os.environ["DEST_BUCKET_FILES_PREFIX"]
     metadata_prefix = os.environ["DEST_BUCKET_RECORDS_PREFIX"]
 
+    json_schema_data = load_json("json_schema_for_metadata_jsons.json")
+
     for record in event["Records"]:
         body: dict[str, str] = json.loads(record["body"])
         batch_db_name = body["batchName"]
@@ -154,15 +157,14 @@ def lambda_handler(event, context):
                         blob_info = blob_cursor.fetchone()
 
                         if not blob_info:
-                            name = image_metadata[name_key]
-                            file_names_not_in_azure.append(name)
+                            file_names_not_in_azure.append(original_name)
                         else:
                             blob_path = blob_info[0]
                             all_image_metadata_by_path[blob_path] = image_metadata
 
             if len(file_names_not_in_azure) > 0:
                 raise Exception(f"{len(file_names_not_in_azure)} file(s) in the JSON were not found in Azure for IAID"
-                                f" {iaid}. These are the names: {", ".join(file_names_not_in_azure)}")
+                                f" {iaid}. These are the originalNames: '{", ".join(file_names_not_in_azure)}'")
 
             images_metadata = []
             for blob_path, image_metadata in all_image_metadata_by_path.items():
@@ -181,5 +183,8 @@ def lambda_handler(event, context):
             replica[files_key] = images_metadata
             replica["totalSize"] = sum(image_metadata["size"] for image_metadata in images_metadata)
 
+        error_message = validate_json(key, json_metadata, json_schema_data)
+        if error_message:
+            raise Exception(error_message)
         metadata_bytes = json.dumps(json_metadata).encode("utf-8")
         upload_to_s3(metadata_bytes, f"{metadata_prefix}/{iaid}.json")
