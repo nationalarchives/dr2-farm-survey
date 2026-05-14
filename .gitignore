@@ -24,3 +24,5 @@ dist/
 venv/
 __pycache__/
 
+# Terraform
+.terraform/
