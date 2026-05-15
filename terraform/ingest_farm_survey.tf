@@ -7,6 +7,10 @@ locals {
   send_to_sqs_lambda_name        = "${local.environment}-dr2-farm-survey-send_to_sqs"
   farm_survey_queue              = "${local.environment}-dr2-farm-survey_replica_jsons"
   farm_survey_role_name          = "${local.environment}-dr2-farm-survey-role"
+  dest_bucket                    = "ds-dev-publication-service-data-imports"
+  dest_bucket_files_prefix       = "tna-digital-files-to-process"
+  dest_records_prefix            = "tna-records-to-process"
+  azure_container                = "farms"
 }
 
 data "aws_ssm_parameter" "azure_account_url" {
@@ -89,9 +93,9 @@ module "dr2_convert_tif_to_jpg_lambda" {
   policies = {
     "${local.tif_to_jpg_lambda_name}-policy" = templatefile("./templates/iam_policy/farm_survey_lambda_policy.json.tpl", {
       dest_account_id             = data.aws_ssm_parameter.dest_account_id.value
-      dr2_farm_survey_dest_bucket = "ds-dev-publication-service-data-imports"
-      files_prefix                = "tna-digital-files-to-process"
-      records_prefix              = "tna-records-to-process"
+      dest_bucket                 = local.dest_bucket
+      files_prefix                = local.dest_bucket_files_prefix
+      records_prefix              = local.dest_records_prefix
       account_id                  = data.aws_caller_identity.current.account_id
       lambda_name                 = local.tif_to_jpg_lambda_name
       queue_name                  = local.farm_survey_queue
@@ -101,11 +105,11 @@ module "dr2_convert_tif_to_jpg_lambda" {
   plaintext_env_vars = {
     AZURE_ACCOUNT_URL          = data.aws_ssm_parameter.azure_account_url.value
     AZURE_CLIENT_ID            = data.aws_ssm_parameter.azure_client_id.value
-    AZURE_FS_CONTAINER         = "farms"
+    AZURE_FS_CONTAINER         = local.azure_container
     AZURE_TENANT_ID            = data.aws_ssm_parameter.azure_tenant_id.value
-    DEST_BUCKET                = "ds-dev-publication-service-data-imports"
-    DEST_BUCKET_FILES_PREFIX   = "tna-digital-files-to-process"
-    DEST_BUCKET_RECORDS_PREFIX = "tna-records-to-process"
+    DEST_BUCKET                = local.dest_bucket
+    DEST_BUCKET_FILES_PREFIX   = local.dest_bucket_files_prefix
+    DEST_BUCKET_RECORDS_PREFIX = local.dest_records_prefix
   }
 
   tags = {

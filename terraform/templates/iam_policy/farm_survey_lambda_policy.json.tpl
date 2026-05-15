@@ -7,8 +7,8 @@
         "s3:PutObject"
       ],
       "Resource": [
-        "arn:aws:s3:::${dr2_farm_survey_dest_bucket}/${files_prefix}/*",
-        "arn:aws:s3:::${dr2_farm_survey_dest_bucket}/${records_prefix}/*",
+        "arn:aws:s3:::${dest_bucket}/${files_prefix}/*",
+        "arn:aws:s3:::${dest_bucket}/${records_prefix}/*",
         "arn:aws:s3:eu-west-2:${dest_account_id}:accesspoint/farm-survey/object/${files_prefix}/*",
         "arn:aws:s3:eu-west-2:${dest_account_id}:accesspoint/farm-survey/object/${records_prefix}/*"
       ]
