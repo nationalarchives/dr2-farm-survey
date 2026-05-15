@@ -3,9 +3,8 @@ locals {
   tif_to_jpg_lambda_name         = "${local.environment}-dr2-farm-survey-tif-to-jpg"
   invocation_event_rule_name     = "${local.environment}-dr2-farm-survey-invocation-rule"
   cloudwatch_event_target_lambda = "${local.environment}-dr2-farm-survey-lambda-target"
-  replica_jsons_prefix           = "${local.environment}-dr2-farm-survey-replica-jsons"
+  replica_jsons_bucket           = "${local.environment}-dr2-farm-survey-replica-jsons"
   send_to_sqs_lambda_name        = "${local.environment}-dr2-farm-survey-send_to_sqs"
-  farm_survey_bucket_name        = "${local.environment}-dr2-farm-survey"
   farm_survey_queue              = "${local.environment}-dr2-farm-survey_replica_jsons"
   farm_survey_role_name          = "${local.environment}-dr2-farm-survey-role"
 }
@@ -32,7 +31,7 @@ data "aws_ssm_parameter" "dest_bucket_alias" {
 
 module "dr2_farm_survey_bucket" {
   source      = "git::https://github.com/nationalarchives/da-terraform-modules//s3"
-  bucket_name = local.farm_survey_bucket_name
+  bucket_name = local.replica_jsons_bucket
 }
 
 resource "aws_s3_object" "image_magick_lambda_layer" {
@@ -107,7 +106,6 @@ module "dr2_convert_tif_to_jpg_lambda" {
     DEST_BUCKET                = "ds-dev-publication-service-data-imports"
     DEST_BUCKET_FILES_PREFIX   = "tna-digital-files-to-process"
     DEST_BUCKET_RECORDS_PREFIX = "tna-records-to-process"
-    REPLICA_JSONS_FOLDER       = "original_replica_jsons"
   }
 
   tags = {
@@ -133,16 +131,15 @@ module "dr2_send_to_farm_survey_queue_lambda" {
   layers          = [aws_lambda_layer_version.python_deps.arn]
   policies = {
     "${local.send_to_sqs_lambda_name}-policy" = templatefile("./templates/iam_policy/send_to_farm_survey_queue_lambda_policy.json.tpl", {
-      replica_jsons_bucket_name = local.replica_jsons_prefix
+      replica_jsons_bucket_name = local.replica_jsons_bucket
       account_id                = data.aws_caller_identity.current.account_id
       queue_name                = local.farm_survey_queue
     })
   }
 
   plaintext_env_vars = {
-    FS_BUCKET            = local.farm_survey_bucket_name
+    AWS_FILES_BUCKET     = local.replica_jsons_bucket
     QUEUE_URL            = module.farm_survey_queue.sqs_queue_url
-    REPLICA_JSONS_PREFIX = local.replica_jsons_prefix
   }
   tags = {
     Name = local.send_to_sqs_lambda_name
