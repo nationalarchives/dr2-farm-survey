@@ -100,13 +100,14 @@ module "dr2_convert_tif_to_jpg_lambda" {
   }
 
   plaintext_env_vars = {
-    DEST_FILES_BUCKET          = "ds-dev-publication-service-data-imports"
-    DEST_BUCKET_FILES_PREFIX   = "tna-digital-files-to-process"
-    DEST_BUCKET_RECORDS_PREFIX = "tna-records-to-process"
     AZURE_ACCOUNT_URL          = data.aws_ssm_parameter.azure_account_url.value
     AZURE_CLIENT_ID            = data.aws_ssm_parameter.azure_client_id.value
     AZURE_FS_CONTAINER         = "farms"
     AZURE_TENANT_ID            = data.aws_ssm_parameter.azure_tenant_id.value
+    DEST_BUCKET                = "ds-dev-publication-service-data-imports"
+    DEST_BUCKET_FILES_PREFIX   = "tna-digital-files-to-process"
+    DEST_BUCKET_RECORDS_PREFIX = "tna-records-to-process"
+    REPLICA_JSONS_FOLDER       = "original_replica_jsons"
   }
 
   tags = {
