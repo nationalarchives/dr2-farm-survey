@@ -24,7 +24,7 @@ update_scopes = {"RecordAndReplica", "RecordOnly"}
 
 image_magick_loc = "/opt/bin/convert" if platform == "linux" else "/usr/local/bin/magick"
 new_file_extension = "jpg"
-jpg_reduction = "33%"
+jpg_reduction = "40%"
 
 
 def token_callback():
