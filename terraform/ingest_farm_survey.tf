@@ -12,26 +12,7 @@ locals {
   dest_records_prefix            = "tna-records-to-process"
   azure_container                = "farms"
   tif_to_jpg_lambda_timeout      = 60
-}
-
-data "aws_ssm_parameter" "azure_account_url" {
-  name = "/${local.environment}/farm-survey/azure-account-url"
-}
-
-data "aws_ssm_parameter" "azure_client_id" {
-  name = "/${local.environment}/farm-survey/azure_client_id"
-}
-
-data "aws_ssm_parameter" "azure_tenant_id" {
-  name = "/${local.environment}/farm-survey/azure-tenant-id"
-}
-
-data "aws_ssm_parameter" "dest_account_id" {
-  name = "/${local.environment}/farm-survey/dest-account-id"
-}
-
-data "aws_ssm_parameter" "dest_bucket_alias" {
-  name = "/${local.environment}/farm-survey/dest_bucket_alias"
+  local_dependencies_location    = "src/convert-tif-to-jpg"
 }
 
 module "dr2_farm_survey_bucket" {
@@ -93,21 +74,21 @@ module "dr2_convert_tif_to_jpg_lambda" {
   layers          = [aws_lambda_layer_version.image_magick.arn, aws_lambda_layer_version.python_deps.arn]
   policies = {
     "${local.tif_to_jpg_lambda_name}-policy" = templatefile("./templates/iam_policy/farm_survey_lambda_policy.json.tpl", {
-      dest_account_id             = data.aws_ssm_parameter.dest_account_id.value
-      dest_bucket                 = local.dest_bucket
-      files_prefix                = local.dest_bucket_files_prefix
-      records_prefix              = local.dest_records_prefix
-      account_id                  = data.aws_caller_identity.current.account_id
-      lambda_name                 = local.tif_to_jpg_lambda_name
-      queue_name                  = local.farm_survey_queue
+      dest_account_id = var.dest_account_id
+      dest_bucket     = local.dest_bucket
+      files_prefix    = local.dest_bucket_files_prefix
+      records_prefix  = local.dest_records_prefix
+      account_id      = data.aws_caller_identity.current.account_id
+      lambda_name     = local.tif_to_jpg_lambda_name
+      queue_name      = local.farm_survey_queue
     })
   }
 
   plaintext_env_vars = {
-    AZURE_ACCOUNT_URL          = data.aws_ssm_parameter.azure_account_url.value
-    AZURE_CLIENT_ID            = data.aws_ssm_parameter.azure_client_id.value
+    AZURE_ACCOUNT_URL          = var.azure_account_url
+    AZURE_CLIENT_ID            = var.azure_client_id
     AZURE_FS_CONTAINER         = local.azure_container
-    AZURE_TENANT_ID            = data.aws_ssm_parameter.azure_tenant_id.value
+    AZURE_TENANT_ID            = var.azure_tenant_id
     DEST_BUCKET                = local.dest_bucket
     DEST_BUCKET_FILES_PREFIX   = local.dest_bucket_files_prefix
     DEST_BUCKET_RECORDS_PREFIX = local.dest_records_prefix

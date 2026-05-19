@@ -1,0 +1,5 @@
+azure_account_url = ""
+azure_client_id   = ""
+azure_tenant_id   = ""
+dest_account_id   = ""
+dest_bucket_alias = ""
