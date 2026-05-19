@@ -1,8 +1,6 @@
 locals {
   environment                    = "sbox"
   tif_to_jpg_lambda_name         = "${local.environment}-dr2-farm-survey-tif-to-jpg"
-  invocation_event_rule_name     = "${local.environment}-dr2-farm-survey-invocation-rule"
-  cloudwatch_event_target_lambda = "${local.environment}-dr2-farm-survey-lambda-target"
   replica_jsons_bucket           = "${local.environment}-dr2-farm-survey-replica-jsons"
   send_to_sqs_lambda_name        = "${local.environment}-dr2-farm-survey-send_to_sqs"
   farm_survey_queue              = "${local.environment}-dr2-farm-survey_replica_jsons"
@@ -147,24 +145,4 @@ module "farm_survey_queue" {
 resource "aws_lambda_event_source_mapping" "lambda_trigger" {
   event_source_arn = module.farm_survey_queue.sqs_arn
   function_name    = module.dr2_convert_tif_to_jpg_lambda.lambda_arn
-}
-
-resource "aws_cloudwatch_event_rule" "fire_event_every_minute" {
-  name                = local.invocation_event_rule_name
-  description         = "triggers the lambda every minute"
-  schedule_expression = "rate(1 minute)"
-}
-
-resource "aws_cloudwatch_event_target" "lambda_trigger" {
-  rule      = aws_cloudwatch_event_rule.fire_event_every_minute.name
-  target_id = local.cloudwatch_event_target_lambda
-  arn       = module.dr2_convert_tif_to_jpg_lambda.lambda_arn
-}
-
-resource "aws_lambda_permission" "allow_eventbridge" {
-  statement_id  = "AllowExecutionFromEventBridge"
-  action        = "lambda:InvokeFunction"
-  function_name = local.tif_to_jpg_lambda_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.fire_event_every_minute.arn
 }
