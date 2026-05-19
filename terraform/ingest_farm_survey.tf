@@ -11,6 +11,7 @@ locals {
   dest_bucket_files_prefix       = "tna-digital-files-to-process"
   dest_records_prefix            = "tna-records-to-process"
   azure_container                = "farms"
+  tif_to_jpg_lambda_timeout      = 60
 }
 
 data "aws_ssm_parameter" "azure_account_url" {
@@ -86,7 +87,7 @@ module "dr2_convert_tif_to_jpg_lambda" {
   filename        = data.archive_file.tif_to_jpg_lambda_code.output_path
   function_name   = local.tif_to_jpg_lambda_name
   handler         = "lambda_function.lambda_handler"
-  timeout_seconds = 60
+  timeout_seconds = local.tif_to_jpg_lambda_timeout
   runtime         = "python3.14"
   memory_size     = 256
   layers          = [aws_lambda_layer_version.image_magick.arn, aws_lambda_layer_version.python_deps.arn]
@@ -158,17 +159,13 @@ module "farm_survey_queue" {
     queue_name = local.farm_survey_queue
   })
   queue_cloudwatch_alarm_visible_messages_threshold = 60
-  visibility_timeout                                = 60
+  visibility_timeout                                = local.tif_to_jpg_lambda_timeout * 6
   encryption_type                                   = "sse"
 }
 
 resource "aws_lambda_event_source_mapping" "lambda_trigger" {
   event_source_arn = module.farm_survey_queue.sqs_arn
   function_name    = module.dr2_convert_tif_to_jpg_lambda.lambda_arn
-
-  depends_on = [
-    module.dr2_convert_tif_to_jpg_lambda
-  ]
 }
 
 resource "aws_cloudwatch_event_rule" "fire_event_every_minute" {
