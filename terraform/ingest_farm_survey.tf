@@ -10,7 +10,8 @@ locals {
   dest_records_prefix            = "tna-records-to-process"
   azure_container                = "farms"
   tif_to_jpg_lambda_timeout      = 60
-  local_dependencies_location    = "src/convert-tif-to-jpg"
+  tif_to_jpg_deps_loc            = "src/convert-tif-to-jpg"
+  send_to_sqs_deps_loc           = "src/send-to-sqs"
 }
 
 module "dr2_farm_survey_bucket" {
@@ -18,25 +19,9 @@ module "dr2_farm_survey_bucket" {
   bucket_name = local.replica_jsons_bucket
 }
 
-resource "aws_s3_object" "image_magick_lambda_layer" {
-  bucket = module.dr2_farm_survey_bucket.s3_bucket_name
-  key    = "layers/dr2-farm-survey-image_magick.zip"
-  source = "../dr2-farm-survey-image_magick.zip"
-
-  source_hash = filebase64sha256("../dr2-farm-survey-image_magick.zip")
-}
-
-resource "aws_s3_object" "python_deps_lambda_layer" {
-  bucket = module.dr2_farm_survey_bucket.s3_bucket_name
-  key    = "layers/dr2-farm-survey-python_deps.zip"
-  source = "../dr2-farm-survey-python_deps.zip"
-
-  source_hash = filebase64sha256("../dr2-farm-survey-python_deps.zip")
-}
 
 resource "aws_lambda_layer_version" "image_magick" {
-  s3_bucket = aws_s3_object.image_magick_lambda_layer.bucket
-  s3_key    = aws_s3_object.image_magick_lambda_layer.key
+  filename  = "${local.tif_to_jpg_deps_loc}/dr2-farm-survey-image_magick.zip"
 
   layer_name = "farm_survey_image_magick_layer"
 
@@ -45,8 +30,7 @@ resource "aws_lambda_layer_version" "image_magick" {
 }
 
 resource "aws_lambda_layer_version" "python_deps" {
-  s3_bucket = aws_s3_object.python_deps_lambda_layer.bucket
-  s3_key    = aws_s3_object.python_deps_lambda_layer.key
+  filename  = "${local.tif_to_jpg_deps_loc}/dr2-farm-survey-python_deps.zip"
 
   layer_name = "farm_survey_python_deps"
 
@@ -54,16 +38,10 @@ resource "aws_lambda_layer_version" "python_deps" {
   compatible_architectures = ["x86_64"]
 }
 
-data "archive_file" "tif_to_jpg_lambda_code" {
-  type        = "zip"
-  source_dir  = "${path.module}/src/convert-tif-to-jpg"
-  output_path = "${path.module}/lambda_function_payload.zip"
-}
-
 module "dr2_convert_tif_to_jpg_lambda" {
   source          = "git::https://github.com/nationalarchives/da-terraform-modules//lambda"
   description     = "A lambda function to retrieve .tif files, convert them to .jpg and upload them to bucket"
-  filename        = data.archive_file.tif_to_jpg_lambda_code.output_path
+  filename        = "${local.tif_to_jpg_deps_loc}/lambda_function_payload.zip"
   function_name   = local.tif_to_jpg_lambda_name
   handler         = "lambda_function.lambda_handler"
   timeout_seconds = local.tif_to_jpg_lambda_timeout
@@ -97,14 +75,9 @@ module "dr2_convert_tif_to_jpg_lambda" {
   }
 }
 
-data "archive_file" "send_to_queue_lambda_code" {
-  type        = "zip"
-  source_file  = "${path.module}/src/send-to-sqs/lambda_function_send_to_sqs.py"
-  output_path = "${path.module}/sqs_lambda_function_payload.zip"
-}
 
 module "dr2_send_to_farm_survey_queue_lambda" {
-  filename        = data.archive_file.send_to_queue_lambda_code.output_path
+  filename        = "${local.send_to_sqs_deps_loc}/sqs_lambda_function_payload.zip"
   source          = "git::https://github.com/nationalarchives/da-terraform-modules//lambda"
   description     = "A lambda function to retrieve json file names from S3 and send them to SQS"
   function_name   = local.send_to_sqs_lambda_name
