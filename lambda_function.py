@@ -24,7 +24,6 @@ update_scopes = {"RecordAndReplica", "RecordOnly"}
 
 image_magick_loc = "/opt/bin/convert" if platform == "linux" else "/usr/local/bin/magick"
 new_file_extension = "jpg"
-jpg_reduction = "33%"
 
 
 def token_callback():
@@ -99,7 +98,7 @@ def get_azure_file_stream(container_client: ContainerClient, blob_path: str) -> 
     return blob_client.download_blob()
 
 
-def convert_to_jpg(tiff_stream: StreamDownloader) -> bytes:
+def convert_to_jpg(jpg_reduction, tiff_stream: StreamDownloader) -> bytes:
     process: Popen[bytes] = Popen(
         [image_magick_loc, "tiff:-", "-resize", jpg_reduction, f"{new_file_extension}:-"], stdin=PIPE, stdout=PIPE,
         stderr=PIPE
@@ -134,6 +133,8 @@ def lambda_handler(event, context):
         replica = json_metadata["replica"]
         all_image_metadata = replica[files_key]
         iaid = record["iaid"]
+
+        jpg_reduction = "60%" if record["citableReference"].startswith("MAF 73") else "40%"
 
         validate_metadata(all_image_metadata)
         print(f"Number of images belonging to IAID {iaid} in JSON:", len(all_image_metadata))
@@ -171,7 +172,7 @@ def lambda_handler(event, context):
                 name = image_metadata[name_key].split("/")[-1]
 
                 tiff_blob_stream: StreamDownloader = get_azure_file_stream(container_client, blob_path)
-                jpg_bytes = convert_to_jpg(tiff_blob_stream)
+                jpg_bytes = convert_to_jpg(jpg_reduction, tiff_blob_stream)
                 upload_to_s3(jpg_bytes, f"{files_prefix}/{iaid}/{name}")
 
                 file_size_kb = math.ceil(len(jpg_bytes) / 1000)
