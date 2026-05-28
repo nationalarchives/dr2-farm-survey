@@ -54,6 +54,7 @@ def main():
     schema_file = sys.argv[2]
 
     validate_local_jsons(jsons_folder, schema_file)
+    print(f"\nJSON files validated successfully")
 
 
 if __name__ == "__main__":
