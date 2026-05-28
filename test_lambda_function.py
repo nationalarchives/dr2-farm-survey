@@ -30,8 +30,8 @@ class BlobProperties:
         self.container = container
 
 
-def call_arg(mock: MagicMock, count=0):
-    return mock.call_args_list[count].args[0]
+def call_args(mock: MagicMock, count=0):
+    return mock.call_args_list[count].args
 
 
 def call_kwarg(mock: MagicMock, param, count=0):
@@ -220,10 +220,11 @@ class TestLambdaFunction(unittest.TestCase):
         process.returncode = 0
         tiff_stream = MagicMock()
         tiff_stream.read.return_value = b"tiff_stream"
+        jpg_reduction = "40%"
 
-        jpg_bytes = lambda_function.convert_to_jpg(tiff_stream)
+        jpg_bytes = lambda_function.convert_to_jpg(jpg_reduction, tiff_stream)
         self.assertEqual(b"jpg_bytes", jpg_bytes)
-        self.assertEqual([image_magick_loc, "tiff:-", "-resize", "33%", "jpg:-"], popen.call_args.args[0])
+        self.assertEqual([image_magick_loc, "tiff:-", "-resize", "40%", "jpg:-"], popen.call_args.args[0])
         self.assertEqual({"stdin": -1, "stdout": -1, "stderr": -1}, popen.call_args.kwargs)
         self.assertEqual({"input": b"tiff_stream"}, process.communicate.call_args.kwargs)
         self.assertEqual(1, tiff_stream.read.call_count)
@@ -238,10 +239,10 @@ class TestLambdaFunction(unittest.TestCase):
         tiff_stream.read.return_value = b"tiff_stream"
 
         with self.assertRaises(RuntimeError) as context:
-            lambda_function.convert_to_jpg(tiff_stream)
+            lambda_function.convert_to_jpg("40%", tiff_stream)
 
         self.assertEqual("Conversion from TIFF to JPG failed: Conversion Error", context.exception.args[0])
-        self.assertEqual([image_magick_loc, "tiff:-", "-resize", "33%", "jpg:-"], popen.call_args.args[0])
+        self.assertEqual([image_magick_loc, "tiff:-", "-resize", "40%", "jpg:-"], popen.call_args.args[0])
         self.assertEqual({"stdin": -1, "stdout": -1, "stderr": -1}, popen.call_args.kwargs)
         self.assertEqual({"input": b"tiff_stream"}, process.communicate.call_args.kwargs)
         self.assertEqual(1, tiff_stream.read.call_count)
@@ -340,45 +341,36 @@ class TestLambdaFunction(unittest.TestCase):
             validate_metadata.call_args_list[0].args
         )
 
-    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
-        "records_prefix"}, clear=True)
-    @patch("lambda_function.token_callback")
-    @patch("lambda_function.get_container_client")
-    @patch("lambda_function.s3_setup")
-    @patch("lambda_function.get_json_metadata")
-    @patch("lambda_function.validate_metadata")
-    @patch("lambda_function.get_azure_file_stream")
-    @patch("lambda_function.convert_to_jpg")
-    def test_lambda_handler_should_upload_files_and_metadata_to_correct_s3_bucket(self, convert_to_jpg,
-                                                                                  get_azure_file_stream,
-                                                                                  validate_metadata, get_json_metadata,
-                                                                                  s3_setup, get_container_client,
-                                                                                  token_callback):
+
+    def lambda_handler_test_good_path(self, series, series_no, expected_reduction, convert_to_jpg,
+                                      get_azure_file_stream, validate_metadata, get_json_metadata,
+                                      s3_setup, get_container_client, token_callback):
         token_callback.return_value = "token_callback"
         get_container_client.return_value = "container_client_response"
 
         get_json_metadata.return_value = {
-            "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
+            "record": required_records_fields | {"citableReference": f"{series}/123/44/5", "replicaId":
+                "23333d87-99c3-4d46-9972-2c583ccfca72"},
             "replica": {
                 "files": [
                     {
                         "format": "jpg",
-                        "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                        "name": f"66/MAF/{series_no}/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
                         "originalName": "file1.tif"
                     },
                     {
                         "format": "jpg",
-                        "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                        "name": f"66/MAF/{series_no}/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
                         "originalName": "file2.tif"
                     },
                     {
                         "format": "jpg",
-                        "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
+                        "name": f"66/MAF/{series_no}/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
                         "originalName": "file3.tif"
                     },
                     {
                         "format": "jpg",
-                        "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
+                        "name": f"66/MAF/{series_no}/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
                         "originalName": "file4.tif"
                     }
                 ],
@@ -396,21 +388,22 @@ class TestLambdaFunction(unittest.TestCase):
         convert_to_jpg.side_effect = [name_to_kbs(blob.name) for blob in blobs_in_container]
 
         lambda_function.lambda_handler(
-            {"Records": [{"body": """{"batchName": "farm_survey_test",
-            "metadataLocation":"s3://my-bucket/images/image.json"}"""}]}, None)
+            {"Records": [{"body": """{"batchName": "farm_survey_test", "metadataLocation":"s3://my-bucket/images/image.json"}"""}]},
+            None
+        )
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
         self.assertEqual((s3_client, "my-bucket", "images/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([
-                 {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                 {"format": "jpg", "name": f"66/MAF/{series_no}/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
                   "originalName": "file1.tif"},
-                 {"format": "jpg", "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                 {"format": "jpg", "name": f"66/MAF/{series_no}/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
                   "originalName": "file2.tif"},
-                 {"format": "jpg", "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
+                 {"format": "jpg", "name": f"66/MAF/{series_no}/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
                   "originalName": "file3.tif"},
-                 {"format": "jpg", "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
+                 {"format": "jpg", "name": f"66/MAF/{series_no}/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
                   "originalName": "file4.tif"}
              ],),
             validate_metadata.call_args_list[0].args
@@ -423,10 +416,11 @@ class TestLambdaFunction(unittest.TestCase):
                          get_azure_file_stream.call_args_list[2].args)
         self.assertEqual(("container_client_response", "folder1/folder1_1/file4.tif"),
                          get_azure_file_stream.call_args_list[3].args)
-        self.assertEqual("file1.tif bytes", call_arg(convert_to_jpg).name)
-        self.assertEqual("file2.tif bytes", call_arg(convert_to_jpg, 1).name)
-        self.assertEqual("file3.tif bytes", call_arg(convert_to_jpg, 2).name)
-        self.assertEqual("file4.tif bytes", call_arg(convert_to_jpg, 3).name)
+
+        for n in range(0, 4):
+            jpg_reduction, tiff_stream = call_args(convert_to_jpg, n)
+            self.assertEqual(expected_reduction, jpg_reduction)
+            self.assertEqual(f"file{n + 1}.tif bytes", tiff_stream.name)
 
         self.assertEqual(5, upload_to_s3.call_count)
         upload_calls = upload_to_s3.call_args_list
@@ -440,19 +434,20 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual((name_to_kbs(blobs_in_container[3].name),
                           f"{s3_prefix}/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg"), upload_calls[3].args)
         expected_metadata = {
-            "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
+            "record": required_records_fields | {"citableReference": f"{series}/123/44/5", "replicaId":
+                "23333d87-99c3-4d46-9972-2c583ccfca72"},
             "replica": {
                 "files": [
-                    {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                    {"format": "jpg", "name": f"66/MAF/{series_no}/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
                      "originalName": "file1.tif",
                      "checkSum": "6c319749b5a62079e4bbe7b49f333d79622e33899077b34397df613df5f96198", "size": 2},
-                    {"format": "jpg", "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                    {"format": "jpg", "name": f"66/MAF/{series_no}/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
                      "originalName": "file2.tif",
                      "checkSum": "95ca985f19c27633a48f52ec37fefd6c6998584698caa2e105ab761898a5496a", "size": 2},
-                    {"format": "jpg", "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
+                    {"format": "jpg", "name": f"66/MAF/{series_no}/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
                      "originalName": "file3.tif",
                      "checkSum": "e3dd291076cc2b1e5860b386aefd60ab36abbc92c9a76ce79bc128ccc1b8561e", "size": 2},
-                    {"format": "jpg", "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
+                    {"format": "jpg", "name": f"66/MAF/{series_no}/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
                      "originalName": "file4.tif",
                      "checkSum": "95f6f71ab879aecaa17545ec4b96bc77adad5a52901ba91fb66c6a0e99c7469f", "size": 2}
                 ],
@@ -466,6 +461,46 @@ class TestLambdaFunction(unittest.TestCase):
              "records_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50.json"),
             upload_calls[4].args
         )
+
+    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
+        "records_prefix"}, clear=True)
+    @patch("lambda_function.token_callback")
+    @patch("lambda_function.get_container_client")
+    @patch("lambda_function.s3_setup")
+    @patch("lambda_function.get_json_metadata")
+    @patch("lambda_function.validate_metadata")
+    @patch("lambda_function.get_azure_file_stream")
+    @patch("lambda_function.convert_to_jpg")
+    def test_lambda_handler_should_reduce_percentage_to_40_if_not_maf73_and_upload_files_and_metadata_to_correct_s3_bucket(
+        self, convert_to_jpg, get_azure_file_stream, validate_metadata, get_json_metadata, s3_setup,
+        get_container_client, token_callback):
+
+        series_no = 32
+        series = f"MAF {series_no}"
+
+        expected_reduction = "40%"
+        self.lambda_handler_test_good_path(series, series_no, expected_reduction, convert_to_jpg, get_azure_file_stream, validate_metadata,
+                                           get_json_metadata, s3_setup, get_container_client, token_callback)
+
+    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
+        "records_prefix"}, clear=True)
+    @patch("lambda_function.token_callback")
+    @patch("lambda_function.get_container_client")
+    @patch("lambda_function.s3_setup")
+    @patch("lambda_function.get_json_metadata")
+    @patch("lambda_function.validate_metadata")
+    @patch("lambda_function.get_azure_file_stream")
+    @patch("lambda_function.convert_to_jpg")
+    def test_lambda_handler_should_reduce_percentage_to_60_if_maf73_and_upload_files_and_metadata_to_correct_s3_bucket(
+        self, convert_to_jpg, get_azure_file_stream, validate_metadata, get_json_metadata, s3_setup,
+        get_container_client, token_callback):
+
+        series_no = 73
+        series = f"MAF {series_no}"
+
+        expected_reduction = "60%"
+        self.lambda_handler_test_good_path(series, series_no, expected_reduction, convert_to_jpg, get_azure_file_stream, validate_metadata,
+                                           get_json_metadata, s3_setup, get_container_client, token_callback)
 
     @patch.dict(os.environ,
                 {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX": "records_prefix"},
