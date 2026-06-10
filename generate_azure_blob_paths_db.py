@@ -30,11 +30,17 @@ conn = sqlite3.connect("farm-survey.db")
 cursor = conn.cursor()
 cursor.execute("CREATE TABLE IF NOT EXISTS farm_survey_paths (filePath, originalName)")
 
-for page in pages:
+total_files_retrieved = 0
+for page_no, page in enumerate(pages):
     file_paths_and_names = []
     for file_path in page:
         if file_path.endswith(".tif"):
             file_paths_and_names.append((file_path, file_path.split("/")[-1]))
 
-    cursor.executemany("INSERT INTO farm_survey_paths (filPath, originalName) VALUES (?, ?)", file_paths_and_names)
+    cursor.executemany("INSERT INTO farm_survey_paths (filePath, originalName) VALUES (?, ?)",
+                       file_paths_and_names)
     conn.commit()
+    file_paths_and_names_retrieved = len(file_paths_and_names)
+    total_files_retrieved += file_paths_and_names_retrieved
+    print(f"Page {page_no + 1} - {total_files_retrieved} file paths and names written so far")
+conn.close()

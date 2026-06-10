@@ -29,7 +29,7 @@ def validate_local_jsons(jsons_folder, schema_file):
     for direct_dir, _, files_in_dir in Path(jsons_folder).walk():
         if files_in_dir:  # for each directory, there could be just directories inside
             for n, json_file_name in enumerate(files_in_dir):
-                if n % 100 == 0:
+                if n != 0 and n % 100 == 0:
                     print(f"{n} files processed")
                 json_data = load_json(direct_dir / json_file_name)
                 schema_data = load_json(schema_file)
@@ -54,6 +54,7 @@ def main():
     schema_file = sys.argv[2]
 
     validate_local_jsons(jsons_folder, schema_file)
+    print(f"\nJSON files validated successfully")
 
 
 if __name__ == "__main__":
