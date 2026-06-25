@@ -65,12 +65,6 @@ def s3_setup():
     return s3_client, upload_to_s3
 
 
-def get_json_metadata(s3_client, bucket, key):
-    response = s3_client.get_object(Bucket=bucket, Key=key)
-    json_metadata = json.loads(response["Body"].read().decode("utf-8"))
-    return json_metadata
-
-
 def validate_metadata(all_image_metadata: list[dict[str, str]]):
     metadata_grouped_by_orig_name = {name: list(metadata) for name, metadata in
                                      groupby(all_image_metadata, lambda m: m[original_name_key])}
@@ -120,16 +114,12 @@ def lambda_handler(event, context):
     json_schema_data = load_json("json_schema_for_metadata_jsons.json")
 
     for record in event["Records"]:
-        body: dict[str, str] = json.loads(record["body"])
+        body: dict = json.loads(record["body"])
         batch_db_name = body["batchName"]
-        metadata_location = body["metadataLocation"]
-        metadata_uri = urlparse(metadata_location)
-        bucket = metadata_uri.netloc
-        key = metadata_uri.path[1:]
+        json_name = body["jsonName"]
+        json_metadata = body["jsonMetadata"]
 
-        json_metadata = get_json_metadata(s3_client, bucket, key)
-
-        record = json_metadata["record"]
+        record: dict = json_metadata["record"]
         replica = json_metadata["replica"]
         all_image_metadata = replica[files_key]
         iaid = record["iaid"]
@@ -184,7 +174,7 @@ def lambda_handler(event, context):
             replica[files_key] = images_metadata
             replica["totalSize"] = sum(image_metadata["size"] for image_metadata in images_metadata)
 
-        error_message = validate_json(key, json_metadata, json_schema_data)
+        error_message = validate_json(json_name, json_metadata, json_schema_data)
         if error_message:
             raise Exception(error_message)
         metadata_bytes = json.dumps(json_metadata).encode("utf-8")

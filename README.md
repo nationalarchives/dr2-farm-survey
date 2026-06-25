@@ -26,7 +26,11 @@ The lambda doesn't return anything as it sends messages to SQS
 
 1. Gets the "batchName" from the event
 2. Gets the JSON file names from the specified bucket via a paginator
-3. Sends the S3 location of each JSON to SQS along with the `batchName`
+3. Gets the metadata file contents from S3
+4. Does JSON validation on the metadata
+   * This is preliminary validation to ensure JSONs received are in the correct format. It doesn't require files to
+     have a `size` and `totalSize` can be `null` as these things are modified in the other lambda
+5. Sends the JSON metadata and file name of each JSON to SQS along with the `batchName`
 
 
 ## Convert Images from TIFF to JPEG
@@ -90,7 +94,7 @@ The lambda doesn't return anything as it uploads the files to an S3 bucket
 
 ## Validate Farm Survey JSONs
 
-This code is called by the "Convert Images from TIFF to JPEG" code but can also be run locally.
+This code is called by the "Send to SQS" and the "Convert Images from TIFF to JPEG" code but can also be run locally.
 
 ### How to run locally
 

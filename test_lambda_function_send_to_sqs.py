@@ -19,7 +19,7 @@ class TestLambdaFunction(unittest.TestCase):
         s3_client.get_paginator.return_value = paginator
         boto3.client.return_value = s3_client
 
-        aws_files_bucket, list_jsons_in_bucket = lambda_function_send_to_sqs.s3_setup("test_batch1")
+        s3_client, aws_files_bucket, list_jsons_in_bucket = lambda_function_send_to_sqs.s3_setup("test_batch1")
         response_iter = list_jsons_in_bucket()
 
         self.assertEqual("bucket1", aws_files_bucket)
@@ -49,16 +49,29 @@ class TestLambdaFunction(unittest.TestCase):
             "https://folder_name/an_s3_object.json"}, "QueueUrl": "https://sqs.queueurl.com"},
                          sqs_client.send_message.call_args.kwargs)
 
+    @patch("lambda_function.boto3")
     @patch("lambda_function_send_to_sqs.s3_setup")
     @patch("lambda_function_send_to_sqs.sqs_setup")
     def test_lambda_handler_should_get_the_file_objects_from_the_s3_bucket_and_send_them_to_sqs(self, sqs_setup,
-                                                                                                s3_setup):
+                                                                                                s3_setup, boto3):
         list_jsons_in_bucket = MagicMock()
         list_jsons_in_bucket.return_value = iter([
             {"Contents": [{"Key": "folder_name/s3_object_1.json"}, {"Key": "folder_name/s3_object_2.json"}]},
             {"Contents": [{"Key": "folder_name/s3_object_3.json"}, {"Key": "folder_name/s3_object_4.json"}]}
         ])
-        s3_setup.return_value = ("bucket1", list_jsons_in_bucket)
+        s3_client = MagicMock()
+        streaming_body = MagicMock()
+        reader = MagicMock()
+        streaming_body.read.return_value = reader
+        reader.decode.return_value = """{"IAID": "123", "images": [{"file_name": "file.tif"}]}"""
+
+        s3_client.get_object.return_value = {
+            "Body": streaming_body
+        }
+
+        boto3.client.return_value = s3_client
+
+        s3_setup.return_value = (s3_client, "bucket1", list_jsons_in_bucket)
 
         send_to_sqs = MagicMock()
         sqs_setup.return_value = send_to_sqs
@@ -70,10 +83,10 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual(4, send_to_sqs.call_count)
         call_args = [call.args[0] for call in send_to_sqs.call_args_list]
         self.assertEqual([
-            """{"batchName": "test_batch1", "metadataLocation": "s3://bucket1/folder_name/s3_object_1.json"}""",
-            """{"batchName": "test_batch1", "metadataLocation": "s3://bucket1/folder_name/s3_object_2.json"}""",
-            """{"batchName": "test_batch1", "metadataLocation": "s3://bucket1/folder_name/s3_object_3.json"}""",
-            """{"batchName": "test_batch1", "metadataLocation": "s3://bucket1/folder_name/s3_object_4.json"}"""],
+            """{"batchName": "test_batch1", "jsonName": "folder_name/s3_object_1.json", "jsonMetadata": {"IAID": "123", "images": [{"file_name": "file.tif"}]}}""",
+            """{"batchName": "test_batch1", "jsonName": "folder_name/s3_object_2.json", "jsonMetadata": {"IAID": "123", "images": [{"file_name": "file.tif"}]}}""",
+            """{"batchName": "test_batch1", "jsonName": "folder_name/s3_object_3.json", "jsonMetadata": {"IAID": "123", "images": [{"file_name": "file.tif"}]}}""",
+            """{"batchName": "test_batch1", "jsonName": "folder_name/s3_object_4.json", "jsonMetadata": {"IAID": "123", "images": [{"file_name": "file.tif"}]}}"""],
             call_args
         )
 
@@ -86,7 +99,7 @@ class TestLambdaFunction(unittest.TestCase):
         list_jsons_in_bucket.return_value = iter([
             {"Contents": [{"Key": "folder_name/"}]}, {"Contents": [{"Key": "another_folder_name/"}]}
         ])
-        s3_setup.return_value = ("bucket1", list_jsons_in_bucket)
+        s3_setup.return_value = (None, "bucket1", list_jsons_in_bucket)
 
         send_to_sqs = MagicMock()
         sqs_setup.return_value = send_to_sqs

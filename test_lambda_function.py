@@ -93,24 +93,6 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual(b"bytesToWrite", s3_client.upload_fileobj.call_args.args[0].getvalue())
         self.assertEqual(("bucket1", "file_name"), s3_client.upload_fileobj.call_args.args[1:])
 
-    def test_get_json_metadata_should_get_metadata_from_s3_and_return_it(self):
-        s3_client = MagicMock()
-        streaming_body = MagicMock()
-        reader = MagicMock()
-        streaming_body.read.return_value = reader
-        reader.decode.return_value = """{"IAID": "123", "images": [{"file_name": "file.tif"}]}"""
-
-        s3_client.get_object.return_value = {
-            "Body": streaming_body
-        }
-
-        json_metadata = lambda_function.get_json_metadata(s3_client, "bucket1", "key1")
-
-        self.assertEqual({"IAID": "123", "images": [{"file_name": "file.tif"}]}, json_metadata)
-        self.assertEqual(1, streaming_body.read.call_count)
-        self.assertEqual("utf-8", reader.decode.call_args.args[0])
-        self.assertEqual({"Bucket": "bucket1", "Key": "key1"}, s3_client.get_object.call_args.kwargs)
-
     def test_validate_metadata_should_not_throw_any_exception_if_the_file_names_and_ids_are_unique(self):
         images_metadata = [
             {
@@ -271,16 +253,15 @@ class TestLambdaFunction(unittest.TestCase):
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
-    @patch("lambda_function.get_json_metadata")
     @patch("lambda_function.validate_metadata")
     def test_lambda_handler_should_throw_an_error_if_update_scope_provided_does_not_exist(self, validate_metadata,
-                                                                                          get_json_metadata, s3_setup,
+                                                                                          s3_setup,
                                                                                           get_container_client,
                                                                                           token_callback):
         token_callback.return_value = "token_callback"
         get_container_client.return_value = "container_client_response"
 
-        get_json_metadata.return_value = {
+        json_metadata = json.dumps({
             "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
             "replica": {
                 "files": [
@@ -308,7 +289,7 @@ class TestLambdaFunction(unittest.TestCase):
                 "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
             },
             "updateScope": "NonExistentUpdateScope"
-        }
+        })
 
         s3_client = MagicMock()
         upload_to_s3 = MagicMock()
@@ -316,8 +297,9 @@ class TestLambdaFunction(unittest.TestCase):
 
         with self.assertRaises(Exception) as context:
             lambda_function.lambda_handler(
-                {"Records": [{"body": """{"batchName": "farm_survey_test",
-                 "metadataLocation":"s3://my-bucket/images/image.json"}"""}]}, None)
+                {"Records": [{"body": f"""{{"batchName": "farm_survey_test", "jsonName": 
+                "5de561ca-1795-452b-bee6-710e6f1e7f50.json", "jsonMetadata": {json_metadata}}}"""}]}, None
+            )
 
         self.assertEqual(
             "updateScope 'NonExistentUpdateScope' is not RecordAndReplica nor RecordOnly",
@@ -326,7 +308,6 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
-        self.assertEqual((s3_client, "my-bucket", "images/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([
                  {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
@@ -341,14 +322,13 @@ class TestLambdaFunction(unittest.TestCase):
             validate_metadata.call_args_list[0].args
         )
 
-
     def lambda_handler_test_good_path(self, series, series_no, expected_reduction, convert_to_jpg,
-                                      get_azure_file_stream, validate_metadata, get_json_metadata,
-                                      s3_setup, get_container_client, token_callback):
+                                      get_azure_file_stream, validate_metadata, s3_setup, get_container_client,
+                                      token_callback):
         token_callback.return_value = "token_callback"
         get_container_client.return_value = "container_client_response"
 
-        get_json_metadata.return_value = {
+        json_metadata = json.dumps({
             "record": required_records_fields | {"citableReference": f"{series}/123/44/5", "replicaId":
                 "23333d87-99c3-4d46-9972-2c583ccfca72"},
             "replica": {
@@ -377,7 +357,7 @@ class TestLambdaFunction(unittest.TestCase):
                 "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"
             },
             "updateScope": "RecordAndReplica"
-        }
+        })
 
         s3_client = MagicMock()
         upload_to_s3 = MagicMock()
@@ -388,13 +368,12 @@ class TestLambdaFunction(unittest.TestCase):
         convert_to_jpg.side_effect = [name_to_kbs(blob.name) for blob in blobs_in_container]
 
         lambda_function.lambda_handler(
-            {"Records": [{"body": """{"batchName": "farm_survey_test", "metadataLocation":"s3://my-bucket/images/image.json"}"""}]},
-            None
+            {"Records": [{"body": f"""{{"batchName": "farm_survey_test", "jsonName": 
+            "5de561ca-1795-452b-bee6-710e6f1e7f50.json", "jsonMetadata": {json_metadata}}}"""}]}, None
         )
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
-        self.assertEqual((s3_client, "my-bucket", "images/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([
                  {"format": "jpg", "name": f"66/MAF/{series_no}/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
@@ -467,40 +446,36 @@ class TestLambdaFunction(unittest.TestCase):
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
-    @patch("lambda_function.get_json_metadata")
     @patch("lambda_function.validate_metadata")
     @patch("lambda_function.get_azure_file_stream")
     @patch("lambda_function.convert_to_jpg")
     def test_lambda_handler_should_reduce_percentage_to_40_if_not_maf73_and_upload_files_and_metadata_to_correct_s3_bucket(
-        self, convert_to_jpg, get_azure_file_stream, validate_metadata, get_json_metadata, s3_setup,
+        self, convert_to_jpg, get_azure_file_stream, validate_metadata, s3_setup,
         get_container_client, token_callback):
-
         series_no = 32
         series = f"MAF {series_no}"
 
         expected_reduction = "40%"
-        self.lambda_handler_test_good_path(series, series_no, expected_reduction, convert_to_jpg, get_azure_file_stream, validate_metadata,
-                                           get_json_metadata, s3_setup, get_container_client, token_callback)
+        self.lambda_handler_test_good_path(series, series_no, expected_reduction, convert_to_jpg, get_azure_file_stream,
+                                           validate_metadata,
+                                           s3_setup, get_container_client, token_callback)
 
     @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
         "records_prefix"}, clear=True)
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
-    @patch("lambda_function.get_json_metadata")
     @patch("lambda_function.validate_metadata")
     @patch("lambda_function.get_azure_file_stream")
     @patch("lambda_function.convert_to_jpg")
     def test_lambda_handler_should_reduce_percentage_to_60_if_maf73_and_upload_files_and_metadata_to_correct_s3_bucket(
-        self, convert_to_jpg, get_azure_file_stream, validate_metadata, get_json_metadata, s3_setup,
-        get_container_client, token_callback):
-
+        self, convert_to_jpg, get_azure_file_stream, validate_metadata, s3_setup, get_container_client, token_callback):
         series_no = 73
         series = f"MAF {series_no}"
 
         expected_reduction = "60%"
-        self.lambda_handler_test_good_path(series, series_no, expected_reduction, convert_to_jpg, get_azure_file_stream, validate_metadata,
-                                           get_json_metadata, s3_setup, get_container_client, token_callback)
+        self.lambda_handler_test_good_path(series, series_no, expected_reduction, convert_to_jpg, get_azure_file_stream,
+                                           validate_metadata, s3_setup, get_container_client, token_callback)
 
     @patch.dict(os.environ,
                 {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX": "records_prefix"},
@@ -508,18 +483,17 @@ class TestLambdaFunction(unittest.TestCase):
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
-    @patch("lambda_function.get_json_metadata")
     @patch("lambda_function.validate_metadata")
     @patch("lambda_function.get_azure_file_stream")
     @patch("lambda_function.convert_to_jpg")
     def test_lambda_handler_should_skip_uploading_file_if_it_is_not_in_azure(self, convert_to_jpg,
                                                                              get_azure_file_stream,
-                                                                             validate_metadata, get_json_metadata,
-                                                                             s3_setup, get_container_client,
+                                                                             validate_metadata, s3_setup,
+                                                                             get_container_client,
                                                                              token_callback):
         token_callback.return_value = "token_callback"
         get_container_client.return_value = "container_client"
-        get_json_metadata.return_value = {
+        json_metadata = json.dumps({
             "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
             "replica": {
                 "files": [
@@ -536,7 +510,7 @@ class TestLambdaFunction(unittest.TestCase):
                 ]
             },
             "updateScope": "RecordAndReplica"
-        }
+        })
 
         validate_metadata.return_value = None
         s3_client = MagicMock()
@@ -550,8 +524,9 @@ class TestLambdaFunction(unittest.TestCase):
         with self.assertRaises(Exception) as context:
             lambda_function.lambda_handler(
                 {"Records": [{
-                    "body": """{"batchName": "farm_survey_test", "metadataLocation":"s3://my-bucket/images/image.json"}"""}]},
-                None)
+                                 "body": f"""{{"batchName": "farm_survey_test", "jsonName": "5de561ca-1795-452b-bee6-710e6f1e7f50.json", "jsonMetadata": {json_metadata}}}"""}]},
+                None
+            )
 
         self.assertEqual(
             "1 file(s) in the JSON were not found in Azure for IAID 5de561ca-1795-452b-bee6-710e6f1e7f50. "
@@ -560,7 +535,6 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
-        self.assertEqual((s3_client, "my-bucket", "images/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([{"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
                "originalName": "file1.tif"},
@@ -579,16 +553,14 @@ class TestLambdaFunction(unittest.TestCase):
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
-    @patch("lambda_function.get_json_metadata")
     @patch("lambda_function.validate_metadata")
     def test_lambda_handler_should_only_upload_metadata_if_update_scope_is_record_only(self, validate_metadata,
-                                                                                       get_json_metadata, s3_setup,
-                                                                                       get_container_client,
+                                                                                       s3_setup, get_container_client,
                                                                                        token_callback):
         token_callback.return_value = "token_callback"
         get_container_client.return_value = "container_client_response"
 
-        get_json_metadata.return_value = {
+        json_metadata = json.dumps({
             "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
             "replica": {
                 "files": [
@@ -621,19 +593,19 @@ class TestLambdaFunction(unittest.TestCase):
                 "totalSize": 100
             },
             "updateScope": "RecordOnly"
-        }
+        })
 
         s3_client = MagicMock()
         upload_to_s3 = MagicMock()
         s3_setup.return_value = (s3_client, upload_to_s3)
 
         lambda_function.lambda_handler(
-            {"Records": [{"body": """{"batchName": "farm_survey_test",
-             "metadataLocation":"s3://my-bucket/images/image.json"}"""}]}, None)
+            {"Records": [{"body": f"""{{"batchName": "farm_survey_test", "jsonName": 
+            "5de561ca-1795-452b-bee6-710e6f1e7f50.json", "jsonMetadata": {json_metadata}}}"""}]}, None
+        )
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
-        self.assertEqual((s3_client, "my-bucket", "images/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([
                  {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
@@ -681,16 +653,14 @@ class TestLambdaFunction(unittest.TestCase):
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
-    @patch("lambda_function.get_json_metadata")
     @patch("lambda_function.validate_metadata")
     def test_lambda_handler_should_throw_an_error_if_metadata_json_does_not_match_schema(self, validate_metadata,
-                                                                                         get_json_metadata, s3_setup,
-                                                                                         get_container_client,
+                                                                                         s3_setup, get_container_client,
                                                                                          token_callback):
         token_callback.return_value = "token_callback"
         get_container_client.return_value = "container_client_response"
 
-        get_json_metadata.return_value = {
+        json_metadata = json.dumps({
             "record": {
                 **required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
                 "iaid": 1111,
@@ -709,7 +679,7 @@ class TestLambdaFunction(unittest.TestCase):
                 "totalSize": 25
             },
             "updateScope": "RecordOnly"
-        }
+        })
 
         s3_client = MagicMock()
         upload_to_s3 = MagicMock()
@@ -717,12 +687,12 @@ class TestLambdaFunction(unittest.TestCase):
 
         with self.assertRaises(Exception) as context:
             lambda_function.lambda_handler(
-                {"Records": [{"body": """{"batchName": "farm_survey_test",
-             "metadataLocation":"s3://my-bucket/images/image.json"}"""}]}, None
+                {"Records": [{"body": f"""{{"batchName": "farm_survey_test", "jsonName": 
+            "5de561ca-1795-452b-bee6-710e6f1e7f50.json", "jsonMetadata": {json_metadata}}}"""}]}, None
             )
 
         self.assertEqual(
-            "\nJSON validation returned an error for file 'images/image.json' at path: record/iaid:\n  - 1111 is " +
+            "\nJSON validation returned an error for file '5de561ca-1795-452b-bee6-710e6f1e7f50.json' at path: record/iaid:\n  - 1111 is " +
             "not of type 'string'",
             context.exception.args[0]
         )
