@@ -9,7 +9,6 @@ from contextlib import closing
 from itertools import groupby
 from subprocess import Popen, PIPE
 from sys import platform
-from urllib.parse import urlparse
 
 import boto3
 from azure.identity import ClientAssertionCredential
@@ -119,73 +118,75 @@ def lambda_handler(event, context):
 
     json_schema_data = load_json("json_schema_for_metadata_jsons.json")
 
-    for record in event["Records"]:
-        body: dict[str, str] = json.loads(record["body"])
-        batch_db_name = body["batchName"]
-        metadata_location = body["metadataLocation"]
-        metadata_uri = urlparse(metadata_location)
-        bucket = metadata_uri.netloc
-        key = metadata_uri.path[1:]
+    for event_record in event["Records"]:
+        s3_records = json.loads(event_record["body"])["Records"]
+        for s3_record in s3_records:
+            s3_event_info: dict = s3_record["s3"]
+            bucket = s3_event_info["bucket"]["name"]
+            s3_object = s3_event_info["object"]
+            key = s3_object["key"]
+            batch_db_name = key.split("/")[0]
 
-        json_metadata = get_json_metadata(s3_client, bucket, key)
+            json_metadata = get_json_metadata(s3_client, bucket, key)
 
-        record = json_metadata["record"]
-        replica = json_metadata["replica"]
-        all_image_metadata = replica[files_key]
-        iaid = record["iaid"]
+            record = json_metadata["record"]
+            replica = json_metadata["replica"]
+            all_image_metadata = replica[files_key]
+            iaid = record["iaid"]
 
-        jpg_reduction = "60%" if record["citableReference"].startswith("MAF 73") else "40%"
+            jpg_reduction = "60%" if record["citableReference"].startswith("MAF 73") else "40%"
 
-        validate_metadata(all_image_metadata)
-        print(f"Number of images belonging to IAID {iaid} in JSON:", len(all_image_metadata))
+            validate_metadata(all_image_metadata)
+            print(f"Number of images belonging to IAID {iaid} in JSON:", len(all_image_metadata))
 
-        update_scope = json_metadata["updateScope"]
-        assert update_scope in update_scopes, (f"updateScope '{update_scope}' is not "
-                                               f"{" nor ".join(sorted(update_scopes))}")
-        if update_scope == "RecordAndReplica":
-            file_names_not_in_azure = []
-            all_image_metadata_by_path = {}
-            with closing(sqlite3.connect(f"{batch_db_name}.db")) as connection:
-                with connection:
-                    for image_metadata in all_image_metadata:
-                        original_name = image_metadata[original_name_key]
+            update_scope = json_metadata["updateScope"]
+            assert update_scope in update_scopes, (f"updateScope '{update_scope}' is not "
+                                                   f"{" nor ".join(sorted(update_scopes))}")
+            if update_scope == "RecordAndReplica":
+                file_names_not_in_azure = []
+                all_image_metadata_by_path = {}
+                with closing(sqlite3.connect(f"{batch_db_name}.db")) as connection:
+                    with connection:
+                        for image_metadata in all_image_metadata:
+                            original_name = image_metadata[original_name_key]
 
-                        blob_cursor = connection.cursor()
-                        blob_cursor.execute(
-                            f"SELECT filePath FROM {batch_db_name} WHERE {original_name_key} = ?;",
-                            (original_name,)
-                        )
-                        blob_info = blob_cursor.fetchone()
+                            blob_cursor = connection.cursor()
+                            blob_cursor.execute(
+                                f"SELECT filePath FROM {batch_db_name} WHERE {original_name_key} = ?;",
+                                (original_name,)
+                            )
+                            blob_info = blob_cursor.fetchone()
 
-                        if not blob_info:
-                            file_names_not_in_azure.append(original_name)
-                        else:
-                            blob_path = blob_info[0]
-                            all_image_metadata_by_path[blob_path] = image_metadata
+                            if not blob_info:
+                                file_names_not_in_azure.append(original_name)
+                            else:
+                                blob_path = blob_info[0]
+                                all_image_metadata_by_path[blob_path] = image_metadata
 
-            if len(file_names_not_in_azure) > 0:
-                raise Exception(f"{len(file_names_not_in_azure)} file(s) in the JSON were not found in Azure for IAID"
-                                f" {iaid}. These are the originalNames: '{", ".join(file_names_not_in_azure)}'")
+                if len(file_names_not_in_azure) > 0:
+                    raise Exception(
+                        f"{len(file_names_not_in_azure)} file(s) in the JSON were not found in Azure for IAID"
+                        f" {iaid}. These are the originalNames: '{", ".join(file_names_not_in_azure)}'")
 
-            images_metadata = []
-            for blob_path, image_metadata in all_image_metadata_by_path.items():
-                name = image_metadata[name_key].split("/")[-1]
+                images_metadata = []
+                for blob_path, image_metadata in all_image_metadata_by_path.items():
+                    name = image_metadata[name_key].split("/")[-1]
 
-                tiff_blob_stream: StreamDownloader = get_azure_file_stream(container_client, blob_path)
-                jpg_bytes = convert_to_jpg(jpg_reduction, tiff_blob_stream)
-                upload_to_s3(jpg_bytes, f"{files_prefix}/{iaid}/{name}")
+                    tiff_blob_stream: StreamDownloader = get_azure_file_stream(container_client, blob_path)
+                    jpg_bytes = convert_to_jpg(jpg_reduction, tiff_blob_stream)
+                    upload_to_s3(jpg_bytes, f"{files_prefix}/{iaid}/{name}")
 
-                file_size_kb = math.ceil(len(jpg_bytes) / 1000)
+                    file_size_kb = math.ceil(len(jpg_bytes) / 1000)
 
-                images_metadata.append(
-                    image_metadata | {"checkSum": hashlib.sha256(jpg_bytes).hexdigest(), "size": file_size_kb}
-                )
+                    images_metadata.append(
+                        image_metadata | {"checkSum": hashlib.sha256(jpg_bytes).hexdigest(), "size": file_size_kb}
+                    )
 
-            replica[files_key] = images_metadata
-            replica["totalSize"] = sum(image_metadata["size"] for image_metadata in images_metadata)
+                replica[files_key] = images_metadata
+                replica["totalSize"] = sum(image_metadata["size"] for image_metadata in images_metadata)
 
-        error_message = validate_json(key, json_metadata, json_schema_data)
-        if error_message:
-            raise Exception(error_message)
-        metadata_bytes = json.dumps(json_metadata).encode("utf-8")
-        upload_to_s3(metadata_bytes, f"{metadata_prefix}/{iaid}.json")
+            error_message = validate_json(key, json_metadata, json_schema_data)
+            if error_message:
+                raise Exception(error_message)
+            metadata_bytes = json.dumps(json_metadata).encode("utf-8")
+            upload_to_s3(metadata_bytes, f"{metadata_prefix}/{iaid}.json")
