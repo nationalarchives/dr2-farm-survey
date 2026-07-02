@@ -125,7 +125,7 @@ def lambda_handler(event, context):
             bucket = s3_event_info["bucket"]["name"]
             s3_object = s3_event_info["object"]
             key = s3_object["key"]
-            batch_db_name = key.split("/")[0]
+            batch_db_name = f"farm_survey_{key.split("/")[0]}"
 
             json_metadata = get_json_metadata(s3_client, bucket, key)
 

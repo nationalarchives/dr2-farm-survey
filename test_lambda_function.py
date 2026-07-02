@@ -47,7 +47,7 @@ sqs_s3_event = {
                         "arn": "arn:aws:s3:::my-bucket"
                       },
                       "object": {
-                        "key": "farm_survey_test/image.json",
+                        "key": "test/image.json",
                         "size": 1024,
                         "eTag": "b10a8db164e0754105b7a99be72e3fe5",
                         "sequencer": "0055AED6DCD90281E5"
@@ -367,7 +367,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
-        self.assertEqual((s3_client, "my-bucket", "farm_survey_test/image.json"), get_json_metadata.call_args.args)
+        self.assertEqual((s3_client, "my-bucket", "test/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([
                  {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
@@ -431,7 +431,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
-        self.assertEqual((s3_client, "my-bucket", "farm_survey_test/image.json"), get_json_metadata.call_args.args)
+        self.assertEqual((s3_client, "my-bucket", "test/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([
                  {"format": "jpg", "name": f"66/MAF/{series_no}/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
@@ -594,7 +594,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
-        self.assertEqual((s3_client, "my-bucket", "farm_survey_test/image.json"), get_json_metadata.call_args.args)
+        self.assertEqual((s3_client, "my-bucket", "test/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([{"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
                "originalName": "file1.tif"},
@@ -665,7 +665,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
-        self.assertEqual((s3_client, "my-bucket", "farm_survey_test/image.json"), get_json_metadata.call_args.args)
+        self.assertEqual((s3_client, "my-bucket", "test/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([
                  {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
@@ -750,7 +750,7 @@ class TestLambdaFunction(unittest.TestCase):
             lambda_function.lambda_handler(sqs_s3_event, None)
 
         self.assertEqual(
-            "\nJSON validation returned an error for file 'farm_survey_test/image.json' at path: record/iaid:\n  - 1111 is " +
+            "\nJSON validation returned an error for file 'test/image.json' at path: record/iaid:\n  - 1111 is " +
             "not of type 'string'",
             context.exception.args[0]
         )
