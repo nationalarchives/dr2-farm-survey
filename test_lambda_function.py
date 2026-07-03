@@ -26,42 +26,20 @@ required_records_fields = {
 sqs_s3_event = {
     "Records": [
         {
-            "messageId": "123",
-            "receiptHandle": "ABC",
             "body": """{
                 "Records": [
                   {
-                    "eventVersion": "2.1",
-                    "eventSource": "aws:s3",
-                    "awsRegion": "us-east-1",
-                    "eventTime": "2026-06-29T15:50:00.000Z",
-                    "eventName": "s3:ObjectCreated:Put",
                     "s3": {
-                      "s3SchemaVersion": "1.0",
-                      "configurationId": "ImageProcessorTrigger",
                       "bucket": {
-                        "name": "my-bucket",
-                        "ownerIdentity": {
-                          "principalId": "A3NL1ZZZZZZZZZ"
-                        },
-                        "arn": "arn:aws:s3:::my-bucket"
+                        "name": "my-bucket"
                       },
                       "object": {
-                        "key": "test/image.json",
-                        "size": 1024,
-                        "eTag": "b10a8db164e0754105b7a99be72e3fe5",
-                        "sequencer": "0055AED6DCD90281E5"
+                        "key": "test/image.json"
                       }
                     }
                   }
                 ]
-              }""",
-            "attributes": {},
-            "messageAttributes": {},
-            "md5OfBody": "098f6bcd4621d373cade4e832627b4f6",
-            "eventSource": "aws:sqs",
-            "eventSourceARN": "sqs_queue",
-            "awsRegion": "us-east-1"
+              }"""
         }
     ]
 }
