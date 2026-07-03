@@ -5,7 +5,7 @@ an SQS queue. The 2nd is to take files from an Azure container, convert it from 
 AWS bucket along with metadata.
 
 
-## Send to SQS
+## Preliminary JSON Validation
 
 ### Input
 
@@ -20,13 +20,18 @@ S3 prefix where the JSONs are held and the database and table used in the 2nd la
 
 ### Output
 
-The lambda doesn't return anything as it sends messages to SQS
+The lambda doesn't return anything; it just prints the result
 
 ### Steps
 
 1. Gets the "batchName" from the event
 2. Gets the JSON file names from the specified bucket via a paginator
-3. Sends the S3 location of each JSON to SQS along with the `batchName`
+3. Gets the metadata file contents from S3
+4. Does JSON validation on the metadata
+   * This is preliminary validation to ensure JSONs received are in the correct format. It doesn't require files to
+     have a `size` and `totalSize` can be `null` as these things are modified in the other lambda
+5. Returns an error message per file
+
 
 
 ## Convert Images from TIFF to JPEG

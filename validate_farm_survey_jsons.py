@@ -19,8 +19,15 @@ def validate_json(json_file_name, json_data, schema_data):
     try:
         validate(instance=json_data, schema=schema_data)
     except ValidationError as e:
-        return (f"\nJSON validation returned an error for file '{json_file_name}' at path: {'/'.join(map(str, e.path))}:\n" +
+        return (
+                f"\nJSON validation returned an error for file '{json_file_name}' at path: {'/'.join(map(str, e.path))}:\n" +
                 f"  - {e.message}")
+
+
+def print_errors(error_messages):
+    for n, error_message in enumerate(error_messages):
+        print(f"{n + 1}. {error_message}")
+    raise ValidationException(f"\n{len(error_messages)} validation error(s) occurred:")
 
 
 def validate_local_jsons(jsons_folder, schema_file):
@@ -35,14 +42,12 @@ def validate_local_jsons(jsons_folder, schema_file):
                 schema_data = load_json(schema_file)
 
                 error_message = validate_json(json_file_name, json_data, schema_data)
-                if error_message:
+                if error_message is not None:
                     error_messages.append(error_message)
 
     if error_messages:
-        print(f"\n{len(error_messages)} validation error(s) occurred:")
-        for n, error_message in enumerate(error_messages):
-            print(f"{n + 1}. {error_message}")
-        sys.exit(1)
+        print_errors(error_messages)
+
 
 def main():
     if len(sys.argv) != 3:
@@ -55,6 +60,10 @@ def main():
 
     validate_local_jsons(jsons_folder, schema_file)
     print(f"\nJSON files validated successfully")
+
+
+class ValidationException(Exception):
+    pass
 
 
 if __name__ == "__main__":
