@@ -1,5 +1,5 @@
 module "config" {
-  source  = "../../da-terraform-configurations"
+  source  = "./da-terraform-configurations"
   project = "dr2"
 }
 
