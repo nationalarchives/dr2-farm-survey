@@ -4,6 +4,9 @@ locals {
   source_jsons_bucket             = "dr2-farm-survey-jsons"
   jsons_to_validate_bucket_prefix = "jsons-to-validate"
   jsons_to_process_bucket_prefix  = "jsons-to-process"
+  dev_bucket_sub_prefix           = "dev"
+  staging_bucket_sub_prefix       = "staging"
+  live_bucket_sub_prefix          = "live"
   json_validation_lambda_name     = "dr2-farm-survey-validate-jsons"
   farm_survey_s3_queue_name       = "dr2-farm-survey-tif-to-jpg-s3-put-events"
   dest_bucket_files_prefix        = "tna-digital-files-to-process"
@@ -44,7 +47,13 @@ module "dr2_farm_survey_bucket" {
 }
 
 resource "aws_s3_object" "bucket_prefixes" {
-  for_each = toset([local.jsons_to_validate_bucket_prefix, local.jsons_to_process_bucket_prefix])
+  for_each = toset([
+    local.jsons_to_validate_bucket_prefix,
+    local.jsons_to_process_bucket_prefix,
+    "${local.jsons_to_process_bucket_prefix}/${local.dev_bucket_sub_prefix}",
+    "${local.jsons_to_process_bucket_prefix}/${local.staging_bucket_sub_prefix}",
+    "${local.jsons_to_process_bucket_prefix}/${local.live_bucket_sub_prefix}"
+  ])
 
   bucket = module.dr2_farm_survey_bucket.s3_bucket_id
   key    = "${each.value}/"
@@ -56,7 +65,7 @@ resource "aws_iam_outbound_web_identity_federation" "identity_federation_for_azu
 
 module "dr2_convert_tif_to_jpg_lambda" {
   source                         = "git::https://github.com/nationalarchives/da-terraform-modules//lambda"
-  description                    = "A lambda function to retrieve .tif files, convert them to .jpg and upload them to bucket"
+  description                    = "A lambda function to retrieve .tif files, convert them to .jpg and upload them to a DS bucket"
   function_name                  = local.tif_to_jpg_lambda_name
   handler                        = "lambda_function.lambda_handler"
   timeout_seconds                = local.lambda_timeout
@@ -75,10 +84,20 @@ module "dr2_convert_tif_to_jpg_lambda" {
       queue_name               = local.farm_survey_s3_queue_name
       source_jsons_bucket_name = local.source_jsons_bucket
 
-      dest_account_id = var.dest_account_id
-      dest_bucket     = var.dest_bucket_alias
-      files_prefix    = local.dest_bucket_files_prefix
-      records_prefix  = local.dest_records_prefix
+      buckets = jsonencode(flatten([
+        [
+          for name, env_dest_account_id in var.dest_account_id : [
+            "arn:aws:s3:eu-west-2:${env_dest_account_id}:accesspoint/farm-survey/object/${local.dest_bucket_files_prefix}/*",
+            "arn:aws:s3:eu-west-2:${env_dest_account_id}:accesspoint/farm-survey/object/${local.dest_records_prefix}/*"
+          ]
+        ],
+        [
+          for name, env_dest_bucket in var.dest_bucket : [
+            "arn:aws:s3:::${env_dest_bucket}/${local.dest_bucket_files_prefix}/*",
+            "arn:aws:s3:::${env_dest_bucket}/${local.dest_records_prefix}/*"
+          ]
+        ]
+      ]))
     })
   }
 
@@ -92,7 +111,9 @@ module "dr2_convert_tif_to_jpg_lambda" {
     AZURE_CLIENT_ID            = var.azure_client_id
     AZURE_FS_CONTAINER         = local.azure_container
     AZURE_TENANT_ID            = var.azure_tenant_id
-    DEST_BUCKET                = var.dest_bucket_alias
+    DEV_DEST_BUCKET            = var.dest_bucket_alias.dev
+    STAGING_DEST_BUCKET        = var.dest_bucket_alias.staging
+    LIVE_DEST_BUCKET           = var.dest_bucket_alias.live
     DEST_BUCKET_FILES_PREFIX   = local.dest_bucket_files_prefix
     DEST_BUCKET_RECORDS_PREFIX = local.dest_records_prefix
   }
