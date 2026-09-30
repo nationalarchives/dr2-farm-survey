@@ -197,12 +197,6 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
   depends_on = [aws_sqs_queue_policy.s3_to_sqs_policy]
 }
 
-resource "aws_lambda_event_source_mapping" "lambda_trigger" {
-  event_source_arn = "arn:aws:sqs:eu-west-2:${local.account_id}:${local.farm_survey_s3_queue_name}"
-  function_name    = module.dr2_convert_tif_to_jpg_lambda.lambda_arn
-  batch_size       = 1
-}
-
 data "archive_file" "preliminary_json_validation_zip" {
   type        = "zip"
   output_path = "${path.module}/dist/preliminary_json_validation_payload.zip"
