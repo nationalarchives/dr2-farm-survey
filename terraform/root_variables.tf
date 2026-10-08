@@ -15,14 +15,33 @@ variable "azure_tenant_id" {
 }
 
 variable "dest_account_id" {
-  type        = string
-  description = "Account ID of the destination bucket"
+  type = object({
+    dev     = string
+    staging = string
+    live    = string
+  })
+  description = "Account IDs of the destination buckets"
   sensitive   = true
 }
 
+variable "dest_bucket" {
+  type = object({
+    dev     = string
+    staging = string
+    live    = string
+  })
+  description = "Name of destination buckets"
+  sensitive   = true
+}
+
+
 variable "dest_bucket_alias" {
-  type        = string
-  description = "Alias of destination bucket"
+  type = object({
+    dev     = string
+    staging = string
+    live    = string
+  })
+  description = "Aliases of destination buckets"
   sensitive   = true
 }
 

@@ -35,7 +35,7 @@ sqs_s3_event = {
                         "name": "my-bucket"
                       },
                       "object": {
-                        "key": "test/image.json"
+                        "key": "jsons-prefix/dev/image.json"
                       }
                     }
                   }
@@ -99,8 +99,6 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual("ClientAssertionCredential()",
                          call_kwarg(blob_service_client, "credential")._extract_mock_name())
 
-    @patch.dict(os.environ, {"DEST_BUCKET": "bucket1", "DEST_BUCKET_FILES_PREFIX": "files_prefix",
-                             "DEST_BUCKET_RECORDS_PREFIX": "records_prefix"}, clear=True)
     @patch("lambda_function.boto3")
     def test_upload_to_s3_should_upload_file_bytes_to_correct_s3_bucket(self, boto3):
         boto3.return_value = MagicMock()
@@ -108,12 +106,12 @@ class TestLambdaFunction(unittest.TestCase):
         boto3.client.return_value = s3_client
 
         client, upload_to_s3 = lambda_function.s3_setup()
-        upload_to_s3(b"bytesToWrite", "file_name")
+        upload_to_s3(b"bytesToWrite", "file_name", "dest_bucket")
 
         self.assertEqual("s3", boto3.client.call_args.args[0])
         self.assertEqual(s3_client, client)
         self.assertEqual(b"bytesToWrite", s3_client.upload_fileobj.call_args.args[0].getvalue())
-        self.assertEqual(("bucket1", "file_name"), s3_client.upload_fileobj.call_args.args[1:])
+        self.assertEqual(("dest_bucket", "file_name", ), s3_client.upload_fileobj.call_args.args[1:])
 
     def test_get_json_metadata_should_get_metadata_from_s3_and_return_it(self):
         s3_client = MagicMock()
@@ -288,8 +286,13 @@ class TestLambdaFunction(unittest.TestCase):
             "SigningAlgorithm": "RS256"
         }, sts_client.get_web_identity_token.call_args.kwargs)
 
-    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
-        "records_prefix"}, clear=True)
+    @patch.dict(os.environ,  {
+        "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+        "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "DEV_DEST_BUCKET": "dev_bucket",
+        "STAGING_DEST_BUCKET": "staging_bucket",
+        "LIVE_DEST_BUCKET": "live_bucket"
+    }, clear=True)
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
@@ -346,7 +349,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
-        self.assertEqual((s3_client, "my-bucket", "test/image.json"), get_json_metadata.call_args.args)
+        self.assertEqual((s3_client, "my-bucket", "jsons-prefix/dev/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([
                  {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
@@ -410,7 +413,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
-        self.assertEqual((s3_client, "my-bucket", "test/image.json"), get_json_metadata.call_args.args)
+        self.assertEqual((s3_client, "my-bucket", "jsons-prefix/dev/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([
                  {"format": "jpg", "name": f"66/MAF/{series_no}/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
@@ -442,13 +445,13 @@ class TestLambdaFunction(unittest.TestCase):
         upload_calls = upload_to_s3.call_args_list
         s3_prefix = "files_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50"
         self.assertEqual((name_to_kbs(blobs_in_container[0].name),
-                          f"{s3_prefix}/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg"), upload_calls[0].args)
+                          f"{s3_prefix}/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg", "dev_bucket"), upload_calls[0].args,)
         self.assertEqual((name_to_kbs(blobs_in_container[1].name),
-                          f"{s3_prefix}/1a765470-ad91-4790-8706-11f78d30c6e1.jpg"), upload_calls[1].args)
+                          f"{s3_prefix}/1a765470-ad91-4790-8706-11f78d30c6e1.jpg", "dev_bucket"), upload_calls[1].args)
         self.assertEqual((name_to_kbs(blobs_in_container[2].name),
-                          f"{s3_prefix}/8d383366-dca5-4390-b466-746eca5f72c5.jpg"), upload_calls[2].args)
+                          f"{s3_prefix}/8d383366-dca5-4390-b466-746eca5f72c5.jpg", "dev_bucket"), upload_calls[2].args)
         self.assertEqual((name_to_kbs(blobs_in_container[3].name),
-                          f"{s3_prefix}/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg"), upload_calls[3].args)
+                          f"{s3_prefix}/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg", "dev_bucket"), upload_calls[3].args)
         expected_metadata = {
             "record": required_records_fields | {"citableReference": f"{series}/123/44/5", "replicaId":
                 "23333d87-99c3-4d46-9972-2c583ccfca72"},
@@ -474,12 +477,214 @@ class TestLambdaFunction(unittest.TestCase):
         }
         self.assertEqual(
             (json.dumps(expected_metadata).encode("utf-8"),
-             "records_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50.json"),
+             "records_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50.json",
+             "dev_bucket"),
             upload_calls[4].args
         )
 
-    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
-        "records_prefix"}, clear=True)
+    @patch.dict(os.environ, {
+        "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+        "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "DEV_DEST_BUCKET": "dev_bucket",
+        "STAGING_DEST_BUCKET": "staging_bucket",
+        "LIVE_DEST_BUCKET": "live_bucket"
+    }, clear=True)
+    @patch("lambda_function.token_callback")
+    @patch("lambda_function.get_container_client")
+    @patch("lambda_function.s3_setup")
+    @patch("lambda_function.get_json_metadata")
+    @patch("lambda_function.validate_metadata")
+    def test_lambda_handler_should_not_throw_an_error_if_the_correct_json_prefixes_were_passed_in(self, validate_metadata,
+                                                                                       get_json_metadata, s3_setup,
+                                                                                       get_container_client,
+                                                                                       token_callback):
+        token_callback.return_value = "token_callback"
+        get_container_client.return_value = "container_client_response"
+
+        get_json_metadata.return_value = {
+            "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
+            "replica": {
+                "files": [
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                        "originalName": "file1.tif",
+                        "size": 25
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                        "originalName": "file2.tif",
+                        "size": 25
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
+                        "originalName": "file3.tif",
+                        "size": 25
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
+                        "originalName": "file4.tif",
+                        "size": 25
+                    }
+                ],
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72",
+                "totalSize": 100
+            },
+            "updateScope": "RecordOnly"
+        }
+
+        s3_client = MagicMock()
+        upload_to_s3 = MagicMock()
+        s3_setup.return_value = (s3_client, upload_to_s3)
+
+        test_prefix_event = sqs_s3_event["Records"][0]
+        test_prefix_event_body = test_prefix_event["body"]
+        staging_prefix_event = {"body": test_prefix_event_body.replace("/dev", "/staging")}
+        prod_prefix_event = {"body": test_prefix_event_body.replace("/dev", "/live")}
+
+        sqs_s3_events_with_diff_prefixes = {"Records": [test_prefix_event, staging_prefix_event, prod_prefix_event]}
+
+        lambda_function.lambda_handler(sqs_s3_events_with_diff_prefixes, None)
+
+        upload_calls = upload_to_s3.call_args_list
+
+        self.assertEqual("dev_bucket", upload_calls[0].args[2])
+        self.assertEqual("staging_bucket", upload_calls[1].args[2])
+        self.assertEqual("live_bucket", upload_calls[2].args[2])
+
+    @patch.dict(os.environ, {
+        "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+        "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "DEV_DEST_BUCKET": "dev_bucket",
+        "STAGING_DEST_BUCKET": "staging_bucket",
+        "LIVE_DEST_BUCKET": "live_bucket"
+    }, clear=True)
+    @patch("lambda_function.token_callback")
+    @patch("lambda_function.get_container_client")
+    @patch("lambda_function.s3_setup")
+    @patch("lambda_function.get_json_metadata")
+    @patch("lambda_function.validate_metadata")
+    def test_lambda_handler_should_throw_a_key_error_if_a_json_prefix_with_an_incorrect_env_was_passed_in(self,
+                                                                                                 validate_metadata,
+                                                                                                  get_json_metadata, s3_setup,
+                                                                                                  get_container_client,
+                                                                                                  token_callback):
+        s3_client = MagicMock()
+        upload_to_s3 = MagicMock()
+        s3_setup.return_value = (s3_client, upload_to_s3)
+
+        test_prefix_event = sqs_s3_event["Records"][0]
+        incorrect_prefix_event = {"body": test_prefix_event["body"].replace("/dev", "/prod")}
+
+        sqs_s3_events_with_wrong_prefix = {"Records": [incorrect_prefix_event]}
+
+        with self.assertRaises(KeyError) as context:
+            lambda_function.lambda_handler(sqs_s3_events_with_wrong_prefix, None)
+
+        self.assertEqual(str(context.exception), "'prod'")
+
+    @patch.dict(os.environ, {
+        "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+        "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "DEV_DEST_BUCKET": "dev_bucket",
+        "STAGING_DEST_BUCKET": "staging_bucket",
+        "LIVE_DEST_BUCKET": "live_bucket"
+    }, clear=True)
+    @patch("lambda_function.token_callback")
+    @patch("lambda_function.get_container_client")
+    @patch("lambda_function.s3_setup")
+    @patch("lambda_function.get_json_metadata")
+    @patch("lambda_function.validate_metadata")
+    def test_lambda_handler_should_throw_a_key_error_if_a_key_without_a_json_prefix_was_passed_in(self,
+                                                                                               validate_metadata,
+                                                                                               get_json_metadata, s3_setup,
+                                                                                               get_container_client,
+                                                                                               token_callback):
+
+        s3_client = MagicMock()
+        upload_to_s3 = MagicMock()
+        s3_setup.return_value = (s3_client, upload_to_s3)
+
+        test_prefix_event = sqs_s3_event["Records"][0]
+        no_prefix_event = {"body": test_prefix_event["body"].replace("jsons-prefix/dev/", "")}
+
+        sqs_s3_events_with_no_prefix = {"Records": [no_prefix_event]}
+
+        with self.assertRaises(Exception) as context:
+            lambda_function.lambda_handler(sqs_s3_events_with_no_prefix, None)
+
+        self.assertEqual(str(context.exception), "The key 'image.json' was not sent from a bucket prefix with an environment name")
+
+    @patch.dict(os.environ, {
+        "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+        "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "DEV_DEST_BUCKET": "dev_bucket",
+        "STAGING_DEST_BUCKET": "staging_bucket",
+        "LIVE_DEST_BUCKET": "live_bucket"
+    }, clear=True)
+    @patch("lambda_function.token_callback")
+    @patch("lambda_function.get_container_client")
+    @patch("lambda_function.s3_setup")
+    @patch("lambda_function.get_json_metadata")
+    @patch("lambda_function.validate_metadata")
+    def test_lambda_handler_should_only_upload_metadata_if_update_scope_is_record_only(self, validate_metadata,
+                                                                                       get_json_metadata, s3_setup,
+                                                                                       get_container_client,
+                                                                                       token_callback):
+        token_callback.return_value = "token_callback"
+        get_container_client.return_value = "container_client_response"
+
+        get_json_metadata.return_value = {
+            "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
+            "replica": {
+                "files": [
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                        "originalName": "file1.tif",
+                        "size": 25
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                        "originalName": "file2.tif",
+                        "size": 25
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/8d383366-dca5-4390-b466-746eca5f72c5.jpg",
+                        "originalName": "file3.tif",
+                        "size": 25
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/4ba95a7e-8dda-406a-b5af-77bc4e113a16.jpg",
+                        "originalName": "file4.tif",
+                        "size": 25
+                    }
+                ],
+                "replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72",
+                "totalSize": 100
+            },
+            "updateScope": "RecordOnly"
+        }
+
+        s3_client = MagicMock()
+        upload_to_s3 = MagicMock()
+        s3_setup.return_value = (s3_client, upload_to_s3)
+
+        lambda_function.lambda_handler(sqs_s3_event, None)
+
+    @patch.dict(os.environ,  {
+        "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+        "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "DEV_DEST_BUCKET": "dev_bucket",
+        "STAGING_DEST_BUCKET": "staging_bucket",
+        "LIVE_DEST_BUCKET": "live_bucket"
+    }, clear=True)
     @patch("lambda_function.db_name", new=db_name)
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
@@ -499,8 +704,13 @@ class TestLambdaFunction(unittest.TestCase):
                                            validate_metadata,
                                            get_json_metadata, s3_setup, get_container_client, token_callback)
 
-    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
-        "records_prefix"}, clear=True)
+    @patch.dict(os.environ,  {
+        "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+        "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "DEV_DEST_BUCKET": "dev_bucket",
+        "STAGING_DEST_BUCKET": "staging_bucket",
+        "LIVE_DEST_BUCKET": "live_bucket"
+    }, clear=True)
     @patch("lambda_function.db_name", new=db_name)
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
@@ -520,9 +730,14 @@ class TestLambdaFunction(unittest.TestCase):
                                            validate_metadata,
                                            get_json_metadata, s3_setup, get_container_client, token_callback)
 
-    @patch.dict(os.environ,
-                {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX": "records_prefix"},
-                clear=True)
+    @patch.dict(os.environ,{
+        "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+        "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "DEV_DEST_BUCKET": "dev_bucket",
+        "STAGING_DEST_BUCKET": "staging_bucket",
+        "LIVE_DEST_BUCKET": "live_bucket"
+    },
+    clear=True)
     @patch("lambda_function.db_name", new=db_name)
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
@@ -576,7 +791,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
-        self.assertEqual((s3_client, "my-bucket", "test/image.json"), get_json_metadata.call_args.args)
+        self.assertEqual((s3_client, "my-bucket", "jsons-prefix/dev/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([{"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
                "originalName": "file1.tif"},
@@ -590,8 +805,13 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(0, upload_to_s3.call_count)
 
-    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
-        "records_prefix"}, clear=True)
+    @patch.dict(os.environ, {
+        "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+        "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "DEV_DEST_BUCKET": "dev_bucket",
+        "STAGING_DEST_BUCKET": "staging_bucket",
+        "LIVE_DEST_BUCKET": "live_bucket"
+    }, clear=True)
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
@@ -647,7 +867,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
-        self.assertEqual((s3_client, "my-bucket", "test/image.json"), get_json_metadata.call_args.args)
+        self.assertEqual((s3_client, "my-bucket", "jsons-prefix/dev/image.json"), get_json_metadata.call_args.args)
         self.assertEqual(
             ([
                  {"format": "jpg", "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
@@ -685,12 +905,18 @@ class TestLambdaFunction(unittest.TestCase):
         }
         self.assertEqual(
             (json.dumps(expected_metadata).encode("utf-8"),
-             "records_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50.json"),
+             "records_prefix/5de561ca-1795-452b-bee6-710e6f1e7f50.json",
+             "dev_bucket"),
             upload_calls[0].args
         )
 
-    @patch.dict(os.environ, {"DEST_BUCKET_FILES_PREFIX": "files_prefix", "DEST_BUCKET_RECORDS_PREFIX":
-        "records_prefix"}, clear=True)
+    @patch.dict(os.environ,  {
+        "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+        "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "DEV_DEST_BUCKET": "dev_bucket",
+        "STAGING_DEST_BUCKET": "staging_bucket",
+        "LIVE_DEST_BUCKET": "live_bucket"
+    }, clear=True)
     @patch("lambda_function.token_callback")
     @patch("lambda_function.get_container_client")
     @patch("lambda_function.s3_setup")
@@ -732,7 +958,7 @@ class TestLambdaFunction(unittest.TestCase):
             lambda_function.lambda_handler(sqs_s3_event, None)
 
         self.assertEqual(
-            "\nJSON validation returned an error for file 'test/image.json' at path: record/iaid:\n  - 1111 is " +
+            "\nJSON validation returned an error for file 'jsons-prefix/dev/image.json' at path: record/iaid:\n  - 1111 is " +
             "not of type 'string'",
             context.exception.args[0]
         )

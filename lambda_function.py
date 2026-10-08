@@ -60,9 +60,8 @@ def get_container_client():
 
 def s3_setup():
     s3_client = boto3.client("s3")
-    dest_bucket = os.environ["DEST_BUCKET"]
 
-    def upload_to_s3(bytes_to_write, file_name):
+    def upload_to_s3(bytes_to_write, file_name, dest_bucket):
         body = io.BytesIO(bytes_to_write)
         s3_client.upload_fileobj(body, dest_bucket, file_name)
 
@@ -120,6 +119,11 @@ def lambda_handler(event, context):
 
     files_prefix = os.environ["DEST_BUCKET_FILES_PREFIX"]
     metadata_prefix = os.environ["DEST_BUCKET_RECORDS_PREFIX"]
+    env_to_dest_bucket = {
+        "dev": os.environ["DEV_DEST_BUCKET"],
+        "staging": os.environ["STAGING_DEST_BUCKET"],
+        "live": os.environ["LIVE_DEST_BUCKET"]
+    }
 
     json_schema_data = load_json("json_schema_for_metadata_jsons.json")
 
@@ -130,6 +134,12 @@ def lambda_handler(event, context):
             source_bucket = s3_event_info["bucket"]["name"]
             s3_object = s3_event_info["object"]
             key = s3_object["key"]
+
+            prefix_env_and_object = key.split("/")
+            if len(prefix_env_and_object) == 1:
+                raise Exception(f"The key '{key}' was not sent from a bucket prefix with an environment name")
+            env = prefix_env_and_object[1]
+            dest_bucket = env_to_dest_bucket[env]
 
             json_metadata = get_json_metadata(s3_client, source_bucket, key)
 
@@ -180,7 +190,7 @@ def lambda_handler(event, context):
 
                     tiff_blob_stream: StreamDownloader = get_azure_file_stream(container_client, blob_path)
                     jpg_bytes = convert_to_jpg(jpg_reduction, tiff_blob_stream)
-                    upload_to_s3(jpg_bytes, f"{files_prefix}/{iaid}/{name}")
+                    upload_to_s3(jpg_bytes, f"{files_prefix}/{iaid}/{name}", dest_bucket)
 
                     file_size_kb = math.ceil(len(jpg_bytes) / 1000)
 
@@ -195,4 +205,4 @@ def lambda_handler(event, context):
             if error_message:
                 raise Exception(error_message)
             metadata_bytes = json.dumps(json_metadata).encode("utf-8")
-            upload_to_s3(metadata_bytes, f"{metadata_prefix}/{iaid}.json")
+            upload_to_s3(metadata_bytes, f"{metadata_prefix}/{iaid}.json", dest_bucket)

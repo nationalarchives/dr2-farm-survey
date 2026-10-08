@@ -1,4 +1,4 @@
-FROM alpine:3.24.1 AS layer-extractor
+FROM alpine:3.24.2 AS layer-extractor
 FROM public.ecr.aws/lambda/python:3.14
 
 COPY requirements-tif-to-jpg.txt ${LAMBDA_TASK_ROOT}
