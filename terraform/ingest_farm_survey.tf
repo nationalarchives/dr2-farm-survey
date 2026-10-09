@@ -168,20 +168,13 @@ module "tif_to_jpg_queue" {
   sqs_policy = templatefile("./templates/sqs/sqs_access_policy.json.tpl", {
     account_id = local.account_id,
     queue_name = local.farm_survey_s3_queue_name
+    bucket_arn = module.dr2_farm_survey_bucket.s3_bucket_arn
+    lambda_role_arn = module.dr2_convert_tif_to_jpg_lambda.lambda_role_arn
   })
   queue_cloudwatch_alarm_visible_messages_threshold = 60
   visibility_timeout                                = local.lambda_timeout * 6
   encryption_type                                   = "sse"
   create_dlq                                        = true
-}
-
-resource "aws_sqs_queue_policy" "s3_to_sqs_policy" {
-  queue_url = module.tif_to_jpg_queue.sqs_queue_url
-
-  policy = templatefile("./templates/iam_policy/trigger_sqs_from_s3_event.tpl", {
-    queue_arn  = module.tif_to_jpg_queue.sqs_arn
-    bucket_arn = module.dr2_farm_survey_bucket.s3_bucket_arn
-  })
 }
 
 resource "aws_s3_bucket_notification" "bucket_notification" {
@@ -194,7 +187,7 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
     filter_suffix = ".json"
   }
 
-  depends_on = [aws_sqs_queue_policy.s3_to_sqs_policy]
+  depends_on = [module.tif_to_jpg_queue]
 }
 
 data "archive_file" "preliminary_json_validation_zip" {
