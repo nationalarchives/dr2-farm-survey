@@ -1,5 +1,6 @@
 *.db
 !farm_survey_test.db
+*.db-
 *.csv
 *.spec
 *.zip
