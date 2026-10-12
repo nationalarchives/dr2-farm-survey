@@ -58,6 +58,6 @@ pages = container_client.list_blob_names().by_page()
 total_files_retrieved = download_file_paths_and_names(pages)
 
 time_taken = datetime.datetime.now() - start_date
-mins, seconds = divmod(time_taken, 60)
+mins, seconds = divmod(int(time_taken.total_seconds()), 60)
 print(f"\nTask completed in {int(mins)} mins {seconds} seconds - {total_files_retrieved} rows written")
 conn.close()
