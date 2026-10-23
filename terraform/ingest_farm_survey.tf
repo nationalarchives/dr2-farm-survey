@@ -29,7 +29,16 @@ locals {
   container_push_and_tag_cmd  = var.container_tool == "container" ? "${var.container_tool} image" : var.container_tool
 
   root_account     = "arn:aws:iam::${sensitive(local.account_id)}:root"
-  research_account = module.config.terraform_config["farm_survey_assume_role_arn"]
+}
+
+module "farm_survey_publisher_sso_policy" {
+  source = "git::https://github.com/nationalarchives/da-terraform-modules//iam_policy"
+  name   = "AWSSSO_FarmSurveyPublisher"
+  policy_string = templatefile("${path.module}/templates/iam_policy/farm_survey_publisher_policy.json.tpl", {
+    account_id                      = local.account_id
+    source_jsons_bucket_name        = local.source_jsons_bucket
+    json_validation_lambda_name     = local.json_validation_lambda_name
+  })
 }
 
 module "dr2_farm_survey_bucket" {
@@ -267,11 +276,4 @@ module "dr2_preliminary_json_validation_lambda" {
   tags = {
     Name = local.json_validation_lambda_name
   }
-}
-
-resource "aws_lambda_permission" "allow_cross_account_invoke" {
-  statement_id  = "AllowExecutionFromCrossAccount"
-  action        = "lambda:InvokeFunction"
-  function_name = local.json_validation_lambda_name
-  principal     = local.research_account
 }
