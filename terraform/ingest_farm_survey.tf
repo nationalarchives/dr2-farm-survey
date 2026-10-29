@@ -1,9 +1,10 @@
 locals {
   account_id                      = data.aws_caller_identity.current.account_id
   tif_to_jpg_lambda_name          = "dr2-farm-survey-tif-to-jpg"
-  source_jsons_bucket             = "dr2-farm-survey-jsons"
+  bucket_name                     = "dr2-farm-survey"
   jsons_to_validate_bucket_prefix = "jsons-to-validate"
   jsons_to_process_bucket_prefix  = "jsons-to-process"
+  azure_blob_paths_bucket_prefix  = "blob_paths_in_azure"
   dev_bucket_sub_prefix           = "dev"
   staging_bucket_sub_prefix       = "staging"
   live_bucket_sub_prefix          = "live"
@@ -24,11 +25,12 @@ locals {
   validation_requirements_file        = "requirements-validation.txt"
   db_file                             = "farm-survey.db"
 
+  azure_blob_paths_db_lambda_name = "dr2-farm-survey-create-azure-blob-paths-db"
+
   tif_to_jpg_lambda_name_repo = "${local.tif_to_jpg_lambda_name}-repo"
   container_login_cmd         = var.container_tool == "container" ? "${var.container_tool} registry" : var.container_tool
   container_push_and_tag_cmd  = var.container_tool == "container" ? "${var.container_tool} image" : var.container_tool
 
-  root_account     = "arn:aws:iam::${sensitive(local.account_id)}:root"
 }
 
 module "farm_survey_publisher_sso_policy" {
@@ -36,27 +38,59 @@ module "farm_survey_publisher_sso_policy" {
   name   = "AWSSSO_FarmSurveyPublisher"
   policy_string = templatefile("${path.module}/templates/iam_policy/farm_survey_publisher_policy.json.tpl", {
     account_id                      = local.account_id
-    source_jsons_bucket_name        = local.source_jsons_bucket
+    source_jsons_bucket_name        = local.bucket_name
     json_validation_lambda_name     = local.json_validation_lambda_name
+    azure_blob_paths_db_lambda_name = local.azure_blob_paths_db_lambda_name
   })
+}
+
+data "archive_file" "azure_blob_paths_db_lambda" {
+  type        = "zip"
+  source_file = "${path.module}/../lambda_function_create_azure_blob_paths_db.py"
+  output_path = "${path.module}/azure_blob_paths_db_lambda_function_payload.zip"
+}
+
+module "dr2_create_azure_blob_paths_db_lambda" {
+  source          = "git::https://github.com/nationalarchives/da-terraform-modules//lambda"
+  filename        = data.archive_file.azure_blob_paths_db_lambda.output_path
+  description     = "A lambda function to create a DB of Azure blob (file) paths upload it to a bucket"
+  function_name   = local.azure_blob_paths_db_lambda_name
+  handler         = "lambda_function_create_azure_blob_paths_db.lambda_handler"
+  runtime         = local.python_runtime
+  timeout_seconds = 60 * 15
+  memory_size     = 512
+  storage_size    = 512
+  policies = {
+    "${local.azure_blob_paths_db_lambda_name}-policy" = templatefile("./templates/iam_policy/azure_paths_db_lambda_policy.json.tpl", {
+      account_id  = sensitive(local.account_id)
+      lambda_name = local.azure_blob_paths_db_lambda_name
+      bucket_name = local.bucket_name
+    })
+  }
+
+  plaintext_env_vars = {
+    AZURE_ACCOUNT_URL  = var.azure_account_url
+    AZURE_CLIENT_ID    = var.azure_client_id
+    AZURE_FS_CONTAINER = local.azure_container
+    AZURE_TENANT_ID    = var.azure_tenant_id
+    SOURCE_BUCKET      = local.bucket_name
+    BLOB_PATHS_PREFIX  = local.azure_blob_paths_bucket_prefix
+  }
+
+  tags = {
+    Name = local.azure_blob_paths_db_lambda_name
+  }
 }
 
 module "dr2_farm_survey_bucket" {
   source                   = "git::https://github.com/nationalarchives/da-terraform-modules//s3"
-  bucket_name              = local.source_jsons_bucket
+  bucket_name              = local.bucket_name
   bucket_versioning_status = "Disabled"
-
-  # Will uncomment this when I have confirmation that it works
-
-  # bucket_policy = templatefile("./templates/iam_policy/s3_cross_account_policy.json.tpl", {
-  #   source_jsons_bucket_name = local.source_jsons_bucket
-  #   root_account             = local.root_account
-  #   research_account         = local.research_account
-  # })
 }
 
 resource "aws_s3_object" "bucket_prefixes" {
   for_each = toset([
+    local.azure_blob_paths_bucket_prefix,
     local.jsons_to_validate_bucket_prefix,
     local.jsons_to_process_bucket_prefix,
     "${local.jsons_to_process_bucket_prefix}/${local.dev_bucket_sub_prefix}",
@@ -91,7 +125,7 @@ module "dr2_convert_tif_to_jpg_lambda" {
       account_id               = sensitive(local.account_id)
       lambda_name              = local.tif_to_jpg_lambda_name
       queue_name               = local.farm_survey_s3_queue_name
-      source_jsons_bucket_name = local.source_jsons_bucket
+      source_jsons_bucket_name = local.bucket_name
 
       buckets = jsonencode(flatten([
         [
@@ -161,6 +195,8 @@ resource "terraform_data" "docker_image" {
 
   provisioner "local-exec" {
     command = <<EOF
+      podman machine init
+      podman machine start
       echo "${data.aws_ecr_authorization_token.token.password}" | ${local.container_login_cmd} login --username AWS --password-stdin ${replace(data.aws_ecr_authorization_token.token.proxy_endpoint, "https://", "")} &&
       ${var.container_tool} build ${var.container_tool == "podman" ? "--format docker " : ""} --platform linux/amd64 -t ${local.tif_to_jpg_lambda_name_repo} ../. &&
       ${local.container_push_and_tag_cmd} tag ${local.tif_to_jpg_lambda_name_repo}:latest ${module.tif_to_jpg_lambda_repo.repository_url}:latest &&
@@ -175,9 +211,9 @@ module "tif_to_jpg_queue" {
   delay_seconds = 90
   queue_name    = local.farm_survey_s3_queue_name
   sqs_policy = templatefile("./templates/sqs/sqs_access_policy.json.tpl", {
-    account_id = local.account_id,
-    queue_name = local.farm_survey_s3_queue_name
-    bucket_arn = module.dr2_farm_survey_bucket.s3_bucket_arn
+    account_id      = local.account_id,
+    queue_name      = local.farm_survey_s3_queue_name
+    bucket_arn      = module.dr2_farm_survey_bucket.s3_bucket_arn
     lambda_role_arn = module.dr2_convert_tif_to_jpg_lambda.lambda_role_arn
   })
   queue_cloudwatch_alarm_visible_messages_threshold = 60
@@ -264,13 +300,13 @@ module "dr2_preliminary_json_validation_lambda" {
   layers          = [aws_lambda_layer_version.python_deps.arn]
   policies = {
     "${local.json_validation_lambda_name}-policy" = templatefile("./templates/iam_policy/json_preliminary_validation_lambda_policy.json.tpl", {
-      source_jsons_bucket_name = local.source_jsons_bucket
+      source_jsons_bucket_name = local.bucket_name
       account_id               = sensitive(local.account_id)
     })
   }
 
   plaintext_env_vars = {
-    SOURCE_JSONS_BUCKET        = local.source_jsons_bucket
+    SOURCE_JSONS_BUCKET        = local.bucket_name
     SOURCE_JSONS_BUCKET_PREFIX = local.jsons_to_validate_bucket_prefix
   }
   tags = {
