@@ -2,6 +2,14 @@
   "Version": "2012-10-17",
   "Statement": [
     {
+      "Action": [
+        "s3:ListAllMyBuckets"
+      ],
+      "Effect": "Allow",
+      "Resource": "*",
+      "Sid": "crossAccountBucketListing"
+    },
+    {
       "Sid": "crossAccountBucketAccess",
       "Effect": "Allow",
       "Action": [
@@ -20,12 +28,23 @@
       "Resource": "arn:aws:s3:::${source_jsons_bucket_name}/*"
     },
     {
+      "Sid": "AllowLambdaListing",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:ListFunctions"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "invokeValidateJsonsAndAzureBlobPathsLambda",
       "Effect": "Allow",
       "Action": [
-        "lambda:InvokeFunction"
+        "lambda:InvokeFunction",
+        "lambda:GetFunctionConfiguration",
+        "lambda:GetFunction"
       ],
       "Resource": [
+        "arn:aws:lambda:eu-west-2:${account_id}:function:${json_validation_lambda_name}",
         "arn:aws:lambda:eu-west-2:${account_id}:function:${json_validation_lambda_name}:*"
       ]
     }
