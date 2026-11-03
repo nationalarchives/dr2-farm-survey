@@ -80,7 +80,7 @@ The lambda doesn't return anything as it uploads the files to an S3 bucket
    1. For each file object, it will, using the file_name, retrieve the Azure Blob path for each from a SQLite database
       (which contains information on all files in an Azure container) make note of the ones that are missing from the Azure container
    2. If there are any files missing, it will throw an exception
-   3. Iterate threw the image metadata objects and call Azure, using the file path and retrieve the bytes
+   3. Iterate threw the image metadata objects and call Azure, using the blob path and retrieve the bytes
       of the TIFF file
    4. Use the TIFF file bytes to convert it into JPEG bytes
    5. Send the bytes to a file in S3 with this path `"{files_prefix}/{iaid}/{name}"`
