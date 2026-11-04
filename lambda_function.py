@@ -167,7 +167,7 @@ def lambda_handler(event, context):
 
                             blob_cursor = connection.cursor()
                             blob_cursor.execute(
-                                f"SELECT filePath FROM 'farm_survey_paths' WHERE {original_name_key} = ?;",
+                                f"SELECT blobPath FROM 'farm_survey_paths' WHERE {original_name_key} = ?;",
                                 (original_name,)
                             )
                             blob_info = blob_cursor.fetchone()
