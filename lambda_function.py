@@ -6,6 +6,7 @@ import os
 import sqlite3
 from collections import Counter
 from contextlib import closing
+from datetime import date
 from itertools import groupby
 from subprocess import Popen, PIPE
 from sys import platform
@@ -75,6 +76,7 @@ def get_json_metadata(s3_client, source_bucket, key):
 
 
 def validate_metadata(all_image_metadata: list[dict[str, str]]):
+    error_messages = []
     metadata_grouped_by_orig_name = {name: list(metadata) for name, metadata in
                                      groupby(all_image_metadata, lambda m: m[original_name_key])}
 
@@ -84,7 +86,7 @@ def validate_metadata(all_image_metadata: list[dict[str, str]]):
 
     if len(duplicate_names) > 0:
         names = ", ".join(duplicate_names)
-        raise Exception(f"These image {name_key}s are duplicated in the replica's 'files' list: {names}")
+        error_messages.append(f"These image {name_key}s are duplicated in the replica's 'files' list: {names}")
 
     names_of_files_with_same_orig_name = [
         ", ".join([image[name_key] for image in images_with_same_orig_name])
@@ -93,8 +95,8 @@ def validate_metadata(all_image_metadata: list[dict[str, str]]):
     ]
     if len(names_of_files_with_same_orig_name) > 0:
         names = [f"{n}. {names}" for n, names in enumerate(names_of_files_with_same_orig_name, 1)]
-        raise Exception(f"""There are images with the same '{original_name_key}':\n{"\n".join(names)}""")
-
+        error_messages.append(f"""There are images with the same '{original_name_key}':\n{"\n".join(names)}""")
+    return error_messages
 
 def get_azure_file_stream(container_client: ContainerClient, blob_path: str) -> StreamDownloader:
     blob_client = container_client.get_blob_client(blob_path)
@@ -116,7 +118,9 @@ def convert_to_jpg(jpg_reduction, tiff_stream: StreamDownloader) -> bytes:
 def lambda_handler(event, context):
     s3_client, upload_to_s3 = s3_setup()
     container_client = get_container_client()
+    date_today = date.today()
 
+    errors_prefix = os.environ["SOURCE_BUCKET_ERRORS_PREFIX"]
     files_prefix = os.environ["DEST_BUCKET_FILES_PREFIX"]
     metadata_prefix = os.environ["DEST_BUCKET_RECORDS_PREFIX"]
     env_to_dest_bucket = {
@@ -137,9 +141,26 @@ def lambda_handler(event, context):
 
             prefix_env_and_object = key.split("/")
             if len(prefix_env_and_object) == 1:
-                raise Exception(f"The key '{key}' was not sent from a bucket prefix with an environment name")
+                error_message = f"The key '{key}' was not sent from a bucket prefix with an environment name"
+                upload_to_s3(
+                    error_message.encode(),
+                    f"{errors_prefix}/{date_today}/{key}.txt",
+                    source_bucket
+                )
+                raise Exception(error_message)
+
             env = prefix_env_and_object[1]
-            dest_bucket = env_to_dest_bucket[env]
+            try:
+                dest_bucket = env_to_dest_bucket[env]
+            except KeyError:
+                error_message = (f"The key '{key}' was sent from a bucket prefix with an invalid environment name '"
+                                 f"{env}'")
+                upload_to_s3(
+                    error_message.encode(),
+                    f"{errors_prefix}/{date_today}/{key}.txt",
+                    source_bucket
+                )
+                raise Exception(error_message)
 
             json_metadata = get_json_metadata(s3_client, source_bucket, key)
 
@@ -149,8 +170,16 @@ def lambda_handler(event, context):
             iaid = record["iaid"]
 
             jpg_reduction = "60%" if record["citableReference"].startswith("MAF 73") else "40%"
+            validation_error_messages = validate_metadata(all_image_metadata)
+            if len(validation_error_messages) > 0:
+                error_message = "\n\n".join(validation_error_messages)
+                upload_to_s3(
+                    error_message.encode(),
+                    f"{errors_prefix}/{date_today}/{env}/{iaid}.txt",
+                    source_bucket
+                )
+                raise Exception(error_message)
 
-            validate_metadata(all_image_metadata)
             print(f"Number of images belonging to IAID {iaid} in JSON:", len(all_image_metadata))
 
             update_scope = json_metadata["updateScope"]
@@ -179,10 +208,16 @@ def lambda_handler(event, context):
                                 all_image_metadata_by_path[blob_path] = image_metadata
 
                 if len(file_names_not_in_azure) > 0:
-                    raise Exception(
+                    error_msg = (
                         f"{len(file_names_not_in_azure)} file(s) in the JSON were not found in Azure for IAID"
                         f" {iaid}. These are the originalNames: '{", ".join(file_names_not_in_azure)}'"
                     )
+                    upload_to_s3(
+                        error_msg.encode(),
+                        f"{errors_prefix}/{date_today}/{env}/{iaid}.txt",
+                        source_bucket
+                    )
+                    raise Exception(error_msg)
 
                 images_metadata = []
                 for blob_path, image_metadata in all_image_metadata_by_path.items():
@@ -203,6 +238,11 @@ def lambda_handler(event, context):
 
             error_message = validate_json(key, json_metadata, json_schema_data)
             if error_message:
+                upload_to_s3(
+                    error_message.encode(),
+                    f"{errors_prefix}/{date_today}/{env}/{iaid}.txt",
+                    source_bucket
+                )
                 raise Exception(error_message)
             metadata_bytes = json.dumps(json_metadata).encode("utf-8")
             upload_to_s3(metadata_bytes, f"{metadata_prefix}/{iaid}.json", dest_bucket)
