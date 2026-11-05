@@ -26,7 +26,8 @@
         "lambda:InvokeFunction"
       ],
       "Resource": [
-        "arn:aws:lambda:eu-west-2:${account_id}:function:${json_validation_lambda_name}:*"
+        "arn:aws:lambda:eu-west-2:${account_id}:function:${json_validation_lambda_name}:*",
+        "arn:aws:lambda:eu-west-2:${account_id}:function:${azure_blob_paths_db_lambda_name}:*"
       ]
     }
   ]
