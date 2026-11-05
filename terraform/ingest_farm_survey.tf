@@ -77,6 +77,8 @@ module "dr2_create_azure_blob_paths_db_lambda" {
     BLOB_PATHS_PREFIX  = local.azure_blob_paths_bucket_prefix
   }
 
+  layers = [aws_lambda_layer_version.python_deps.arn]
+
   tags = {
     Name = local.azure_blob_paths_db_lambda_name
   }
