@@ -12,6 +12,7 @@ locals {
   farm_survey_s3_queue_name       = "dr2-farm-survey-tif-to-jpg-s3-put-events"
   dest_bucket_files_prefix        = "tna-digital-files-to-process"
   dest_records_prefix             = "tna-records-to-process"
+  tif_to_jpg_lambda_errors_prefix = "${local.jsons_to_process_bucket_prefix}/tif_to_jpg_lambda_errors"
   azure_container                 = "farms"
   lambda_timeout                  = 60
   python_runtime                  = "python3.14"
@@ -97,7 +98,8 @@ resource "aws_s3_object" "bucket_prefixes" {
     local.jsons_to_process_bucket_prefix,
     "${local.jsons_to_process_bucket_prefix}/${local.dev_bucket_sub_prefix}",
     "${local.jsons_to_process_bucket_prefix}/${local.staging_bucket_sub_prefix}",
-    "${local.jsons_to_process_bucket_prefix}/${local.live_bucket_sub_prefix}"
+    "${local.jsons_to_process_bucket_prefix}/${local.live_bucket_sub_prefix}",
+    local.tif_to_jpg_lambda_errors_prefix
   ])
 
   bucket = module.dr2_farm_survey_bucket.s3_bucket_id
@@ -152,16 +154,18 @@ module "dr2_convert_tif_to_jpg_lambda" {
   depends_on = [module.tif_to_jpg_lambda_repo]
 
   plaintext_env_vars = {
-    AZURE_ACCOUNT_URL          = var.azure_account_url
-    AZURE_CLIENT_ID            = var.azure_client_id
-    AZURE_FS_CONTAINER         = local.azure_container
-    AZURE_TENANT_ID            = var.azure_tenant_id
-    DEV_DEST_BUCKET            = var.dest_bucket_alias.dev
-    STAGING_DEST_BUCKET        = var.dest_bucket_alias.staging
-    LIVE_DEST_BUCKET           = var.dest_bucket_alias.live
-    DEST_BUCKET_FILES_PREFIX   = local.dest_bucket_files_prefix
-    DEST_BUCKET_RECORDS_PREFIX = local.dest_records_prefix
+    AZURE_ACCOUNT_URL           = var.azure_account_url
+    AZURE_CLIENT_ID             = var.azure_client_id
+    AZURE_FS_CONTAINER          = local.azure_container
+    AZURE_TENANT_ID             = var.azure_tenant_id
+    DEV_DEST_BUCKET             = var.dest_bucket_alias.dev
+    STAGING_DEST_BUCKET         = var.dest_bucket_alias.staging
+    LIVE_DEST_BUCKET            = var.dest_bucket_alias.live
+    DEST_BUCKET_FILES_PREFIX    = local.dest_bucket_files_prefix
+    DEST_BUCKET_RECORDS_PREFIX  = local.dest_records_prefix
+    SOURCE_BUCKET_ERRORS_PREFIX = local.tif_to_jpg_lambda_errors_prefix
   }
+  layers = [aws_lambda_layer_version.python_deps.arn]
 
   tags = {
     Name = local.tif_to_jpg_lambda_name
@@ -301,6 +305,7 @@ module "dr2_preliminary_json_validation_lambda" {
   policies = {
     "${local.json_validation_lambda_name}-policy" = templatefile("./templates/iam_policy/json_preliminary_validation_lambda_policy.json.tpl", {
       source_jsons_bucket_name = local.bucket_name
+      lambda_errors_prefix     = local.tif_to_jpg_lambda_errors_prefix
       account_id               = sensitive(local.account_id)
     })
   }

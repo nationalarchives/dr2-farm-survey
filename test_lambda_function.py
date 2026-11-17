@@ -1,6 +1,7 @@
 import json
 import os
 import unittest
+from datetime import date
 from sys import platform
 from unittest.mock import patch, MagicMock
 
@@ -131,7 +132,7 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual("utf-8", reader.decode.call_args.args[0])
         self.assertEqual({"Bucket": "bucket1", "Key": "key1"}, s3_client.get_object.call_args.kwargs)
 
-    def test_validate_metadata_should_not_throw_any_exception_if_the_file_names_and_ids_are_unique(self):
+    def test_validate_metadata_should_not_return_any_error_if_the_file_names_and_ids_are_unique(self):
         images_metadata = [
             {
                 "format": "jpg",
@@ -157,7 +158,7 @@ class TestLambdaFunction(unittest.TestCase):
 
         lambda_function.validate_metadata(images_metadata)
 
-    def test_validate_metadata_should_throw_an_exception_if_there_are_images_with_same_name_in_json(self):
+    def test_validate_metadata_should_return_an_error_if_there_are_images_with_same_name_in_json(self):
         images_metadata = [
             {
                 "format": "jpg",
@@ -181,15 +182,15 @@ class TestLambdaFunction(unittest.TestCase):
             }
         ]
 
-        with self.assertRaises(Exception) as context:
-            lambda_function.validate_metadata(images_metadata)
+        error_msg = lambda_function.validate_metadata(images_metadata)
 
         self.assertEqual(
-            "These image names are duplicated in the replica's 'files' list: 66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg, "
-            "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
-            context.exception.args[0])
+            ["These image names are duplicated in the replica's 'files' list: "
+             "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg, "
+            "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg"],
+            error_msg)
 
-    def test_validate_metadata_should_throw_an_exception_if_there_are_images_with_same_originalName_in_json(self):
+    def test_validate_metadata_should_return_an_error_if_there_are_images_with_same_originalName_in_json(self):
         images_metadata = [
             {
                 "format": "jpg",
@@ -213,13 +214,13 @@ class TestLambdaFunction(unittest.TestCase):
             }
         ]
 
-        with self.assertRaises(Exception) as context:
-            lambda_function.validate_metadata(images_metadata)
+        error_msg = lambda_function.validate_metadata(images_metadata)
 
-        self.assertEqual("There are images with the same 'originalName':" +
+        self.assertEqual(["There are images with the same 'originalName':" +
                          "\n1. 66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg, 66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg" +
-                         "\n2. 66/MAF/32/6770380c-342b-455d-9f9e-aebd1574a242.jpg, 66/MAF/32/d10ae551-2bed-4d5e-83c9-f6a04924de21.jpg",
-                         context.exception.args[0])
+                         "\n2. 66/MAF/32/6770380c-342b-455d-9f9e-aebd1574a242.jpg, "
+                         "66/MAF/32/d10ae551-2bed-4d5e-83c9-f6a04924de21.jpg"],
+                         error_msg)
 
     def test_get_azure_file_stream_should_get_blob_client_and_download_blob(self):
         container_client = MagicMock()
@@ -289,6 +290,7 @@ class TestLambdaFunction(unittest.TestCase):
     @patch.dict(os.environ,  {
         "DEST_BUCKET_FILES_PREFIX": "files_prefix",
         "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "SOURCE_BUCKET_ERRORS_PREFIX": "errors_prefix",
         "DEV_DEST_BUCKET": "dev_bucket",
         "STAGING_DEST_BUCKET": "staging_bucket",
         "LIVE_DEST_BUCKET": "live_bucket"
@@ -364,6 +366,14 @@ class TestLambdaFunction(unittest.TestCase):
             validate_metadata.call_args_list[0].args
         )
 
+    @patch.dict(os.environ,  {
+        "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+        "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "SOURCE_BUCKET_ERRORS_PREFIX": "errors_prefix",
+        "DEV_DEST_BUCKET": "dev_bucket",
+        "STAGING_DEST_BUCKET": "staging_bucket",
+        "LIVE_DEST_BUCKET": "live_bucket"
+    }, clear=True)
     def lambda_handler_test_good_path(self, series, series_no, expected_reduction, convert_to_jpg,
                                       get_azure_file_stream, validate_metadata, get_json_metadata,
                                       s3_setup, get_container_client, token_callback):
@@ -485,6 +495,7 @@ class TestLambdaFunction(unittest.TestCase):
     @patch.dict(os.environ, {
         "DEST_BUCKET_FILES_PREFIX": "files_prefix",
         "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "SOURCE_BUCKET_ERRORS_PREFIX": "errors_prefix",
         "DEV_DEST_BUCKET": "dev_bucket",
         "STAGING_DEST_BUCKET": "staging_bucket",
         "LIVE_DEST_BUCKET": "live_bucket"
@@ -558,6 +569,7 @@ class TestLambdaFunction(unittest.TestCase):
     @patch.dict(os.environ, {
         "DEST_BUCKET_FILES_PREFIX": "files_prefix",
         "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "SOURCE_BUCKET_ERRORS_PREFIX": "errors_prefix",
         "DEV_DEST_BUCKET": "dev_bucket",
         "STAGING_DEST_BUCKET": "staging_bucket",
         "LIVE_DEST_BUCKET": "live_bucket"
@@ -581,14 +593,22 @@ class TestLambdaFunction(unittest.TestCase):
 
         sqs_s3_events_with_wrong_prefix = {"Records": [incorrect_prefix_event]}
 
-        with self.assertRaises(KeyError) as context:
+        expected_error_msg = \
+            "The key 'jsons-prefix/prod/image.json' was sent from a bucket prefix with an invalid environment name 'prod'"
+
+        with self.assertRaises(Exception) as context:
             lambda_function.lambda_handler(sqs_s3_events_with_wrong_prefix, None)
 
-        self.assertEqual(str(context.exception), "'prod'")
+        self.assertEqual(expected_error_msg.encode(), upload_to_s3.call_args_list[0].args[0])
+        self.assertEqual(f"errors_prefix/{date.today()}/jsons-prefix/prod/image.json.txt",
+                         upload_to_s3.call_args_list[0].args[1])
+        self.assertEqual("my-bucket", upload_to_s3.call_args_list[0].args[2])
+        self.assertEqual(str(context.exception), expected_error_msg)
 
     @patch.dict(os.environ, {
         "DEST_BUCKET_FILES_PREFIX": "files_prefix",
         "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "SOURCE_BUCKET_ERRORS_PREFIX": "errors_prefix",
         "DEV_DEST_BUCKET": "dev_bucket",
         "STAGING_DEST_BUCKET": "staging_bucket",
         "LIVE_DEST_BUCKET": "live_bucket"
@@ -613,14 +633,90 @@ class TestLambdaFunction(unittest.TestCase):
 
         sqs_s3_events_with_no_prefix = {"Records": [no_prefix_event]}
 
+        expected_error_msg = "The key 'image.json' was not sent from a bucket prefix with an environment name"
+
         with self.assertRaises(Exception) as context:
             lambda_function.lambda_handler(sqs_s3_events_with_no_prefix, None)
 
-        self.assertEqual(str(context.exception), "The key 'image.json' was not sent from a bucket prefix with an environment name")
+        self.assertEqual(expected_error_msg.encode(), upload_to_s3.call_args_list[0].args[0])
+        self.assertEqual(f"errors_prefix/{date.today()}/image.json.txt",
+                         upload_to_s3.call_args_list[0].args[1])
+        self.assertEqual("my-bucket", upload_to_s3.call_args_list[0].args[2])
+        self.assertEqual(str(context.exception), expected_error_msg)
+
 
     @patch.dict(os.environ, {
         "DEST_BUCKET_FILES_PREFIX": "files_prefix",
         "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "SOURCE_BUCKET_ERRORS_PREFIX": "errors_prefix",
+        "DEV_DEST_BUCKET": "dev_bucket",
+        "STAGING_DEST_BUCKET": "staging_bucket",
+        "LIVE_DEST_BUCKET": "live_bucket"
+    }, clear=True)
+    @patch("lambda_function.token_callback")
+    @patch("lambda_function.get_container_client")
+    @patch("lambda_function.s3_setup")
+    @patch("lambda_function.get_json_metadata")
+    @patch("lambda_function.validate_metadata")
+    def test_lambda_handler_should_throw_an_error_if_there_were_metadata_validation_errors(self, validate_metadata,
+                                                                                       get_json_metadata, s3_setup,
+                                                                                       get_container_client,
+                                                                                       token_callback):
+        token_callback.return_value = "token_callback"
+        get_container_client.return_value = "container_client_response"
+
+        get_json_metadata.return_value = {
+            "record": required_records_fields | {"replicaId": "23333d87-99c3-4d46-9972-2c583ccfca72"},
+            "replica": {
+                "files": [
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+                        "originalName": "file1.tif"
+                    },
+                    {
+                        "format": "jpg",
+                        "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+                        "originalName": "file5.tif"
+                    }
+                ]
+            },
+            "updateScope": "RecordAndReplica"
+        }
+
+        validate_metadata.return_value = ["A validation error", "Another validation error"]
+
+        s3_client = MagicMock()
+        upload_to_s3 = MagicMock()
+        s3_setup.return_value = (s3_client, upload_to_s3)
+
+        with self.assertRaises(Exception) as context:
+            lambda_function.lambda_handler(sqs_s3_event, None)
+
+
+        expected_error_msg = "A validation error\n\nAnother validation error"
+        self.assertEqual([{
+            "format": "jpg",
+            "name": "66/MAF/32/ed3744e6-9ff7-4bb3-9011-8b45356b6eb7.jpg",
+            "originalName": "file1.tif"
+        },
+        {
+            "format": "jpg",
+            "name": "66/MAF/32/1a765470-ad91-4790-8706-11f78d30c6e1.jpg",
+            "originalName": "file5.tif"
+        }],
+        validate_metadata.call_args_list[0].args[0]
+        )
+        self.assertEqual(expected_error_msg.encode(), upload_to_s3.call_args_list[0].args[0])
+        self.assertEqual(f"errors_prefix/{date.today()}/dev/5de561ca-1795-452b-bee6-710e6f1e7f50.txt",
+                         upload_to_s3.call_args_list[0].args[1])
+        self.assertEqual("my-bucket", upload_to_s3.call_args_list[0].args[2])
+        self.assertEqual(str(context.exception), expected_error_msg)
+
+    @patch.dict(os.environ, {
+        "DEST_BUCKET_FILES_PREFIX": "files_prefix",
+        "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "SOURCE_BUCKET_ERRORS_PREFIX": "errors_prefix",
         "DEV_DEST_BUCKET": "dev_bucket",
         "STAGING_DEST_BUCKET": "staging_bucket",
         "LIVE_DEST_BUCKET": "live_bucket"
@@ -681,6 +777,7 @@ class TestLambdaFunction(unittest.TestCase):
     @patch.dict(os.environ,  {
         "DEST_BUCKET_FILES_PREFIX": "files_prefix",
         "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "SOURCE_BUCKET_ERRORS_PREFIX": "errors_prefix",
         "DEV_DEST_BUCKET": "dev_bucket",
         "STAGING_DEST_BUCKET": "staging_bucket",
         "LIVE_DEST_BUCKET": "live_bucket"
@@ -707,6 +804,7 @@ class TestLambdaFunction(unittest.TestCase):
     @patch.dict(os.environ,  {
         "DEST_BUCKET_FILES_PREFIX": "files_prefix",
         "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "SOURCE_BUCKET_ERRORS_PREFIX": "errors_prefix",
         "DEV_DEST_BUCKET": "dev_bucket",
         "STAGING_DEST_BUCKET": "staging_bucket",
         "LIVE_DEST_BUCKET": "live_bucket"
@@ -733,6 +831,7 @@ class TestLambdaFunction(unittest.TestCase):
     @patch.dict(os.environ,{
         "DEST_BUCKET_FILES_PREFIX": "files_prefix",
         "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "SOURCE_BUCKET_ERRORS_PREFIX": "errors_prefix",
         "DEV_DEST_BUCKET": "dev_bucket",
         "STAGING_DEST_BUCKET": "staging_bucket",
         "LIVE_DEST_BUCKET": "live_bucket"
@@ -772,7 +871,7 @@ class TestLambdaFunction(unittest.TestCase):
             "updateScope": "RecordAndReplica"
         }
 
-        validate_metadata.return_value = None
+        validate_metadata.return_value = []
         s3_client = MagicMock()
         upload_to_s3 = MagicMock()
         s3_setup.return_value = (s3_client, upload_to_s3)
@@ -783,11 +882,8 @@ class TestLambdaFunction(unittest.TestCase):
 
         with self.assertRaises(Exception) as context:
             lambda_function.lambda_handler(sqs_s3_event, None)
-
-        self.assertEqual(
-            "1 file(s) in the JSON were not found in Azure for IAID 5de561ca-1795-452b-bee6-710e6f1e7f50. "
-            "These are the originalNames: 'file5.tif'",
-            context.exception.args[0])
+        expected_error_msg = "1 file(s) in the JSON were not found in Azure for IAID 5de561ca-1795-452b-bee6-710e6f1e7f50. These are the originalNames: 'file5.tif'"
+        self.assertEqual(expected_error_msg, context.exception.args[0])
 
         self.assertEqual(1, s3_setup.call_count)
         self.assertEqual(1, get_container_client.call_count)
@@ -803,11 +899,15 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual([], get_azure_file_stream.call_args_list)
         self.assertEqual([], convert_to_jpg.call_args_list)
 
-        self.assertEqual(0, upload_to_s3.call_count)
+        self.assertEqual(expected_error_msg.encode(), upload_to_s3.call_args_list[0].args[0])
+        self.assertEqual(f"errors_prefix/{date.today()}/dev/5de561ca-1795-452b-bee6-710e6f1e7f50.txt",
+                         upload_to_s3.call_args_list[0].args[1])
+        self.assertEqual("my-bucket", upload_to_s3.call_args_list[0].args[2])
 
     @patch.dict(os.environ, {
         "DEST_BUCKET_FILES_PREFIX": "files_prefix",
         "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "SOURCE_BUCKET_ERRORS_PREFIX": "errors_prefix",
         "DEV_DEST_BUCKET": "dev_bucket",
         "STAGING_DEST_BUCKET": "staging_bucket",
         "LIVE_DEST_BUCKET": "live_bucket"
@@ -913,6 +1013,7 @@ class TestLambdaFunction(unittest.TestCase):
     @patch.dict(os.environ,  {
         "DEST_BUCKET_FILES_PREFIX": "files_prefix",
         "DEST_BUCKET_RECORDS_PREFIX": "records_prefix",
+        "SOURCE_BUCKET_ERRORS_PREFIX": "errors_prefix",
         "DEV_DEST_BUCKET": "dev_bucket",
         "STAGING_DEST_BUCKET": "staging_bucket",
         "LIVE_DEST_BUCKET": "live_bucket"
@@ -957,11 +1058,16 @@ class TestLambdaFunction(unittest.TestCase):
         with self.assertRaises(Exception) as context:
             lambda_function.lambda_handler(sqs_s3_event, None)
 
-        self.assertEqual(
-            "\nJSON validation returned an error for file 'jsons-prefix/dev/image.json' at path: record/iaid:\n  - 1111 is " +
-            "not of type 'string'",
-            context.exception.args[0]
+        expected_error_msg = (
+            "\nJSON validation returned an error for file 'jsons-prefix/dev/image.json' at path: record/iaid:\n  - "
+            "1111 is not of type 'string'"
         )
+
+        self.assertEqual(expected_error_msg.encode(), upload_to_s3.call_args_list[0].args[0])
+        self.assertEqual(f"errors_prefix/{date.today()}/dev/1111.txt",
+                         upload_to_s3.call_args_list[0].args[1])
+        self.assertEqual("my-bucket", upload_to_s3.call_args_list[0].args[2])
+        self.assertEqual(expected_error_msg, context.exception.args[0])
 
 
 if __name__ == '__main__':
