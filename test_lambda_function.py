@@ -1059,7 +1059,7 @@ class TestLambdaFunction(unittest.TestCase):
             lambda_function.lambda_handler(sqs_s3_event, None)
 
         expected_error_msg = (
-            "\nJSON validation returned an error for file 'jsons-prefix/dev/image.json' at path: record/iaid:\n  - "
+            "\nJSON validation returned an error for file 'jsons-prefix/dev/image.json' at path: record/iaid:\n - "
             "1111 is not of type 'string'"
         )
 

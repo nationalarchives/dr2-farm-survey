@@ -12,7 +12,7 @@ def load_json(file_path):
             return json.load(f)
     except Exception as e:
         print(f"Error loading JSON file '{file_path}': {e}")
-        sys.exit(1)
+        raise ValidationException(e)
 
 
 def validate_json(json_file_name, json_data, schema_data):
@@ -20,8 +20,8 @@ def validate_json(json_file_name, json_data, schema_data):
         validate(instance=json_data, schema=schema_data)
     except ValidationError as e:
         return (
-                f"\nJSON validation returned an error for file '{json_file_name}' at path: {'/'.join(map(str, e.path))}:\n" +
-                f"  - {e.message}")
+                f"\nJSON validation returned an error for file '{json_file_name}' at path: {'/'.join(map(str, e.path))}:\n - {e.message}"
+        )
 
 
 def print_errors(error_messages):
@@ -33,17 +33,17 @@ def print_errors(error_messages):
 def validate_local_jsons(jsons_folder, schema_file):
     error_messages = []
     print(f"Validating JSON files in folder '{jsons_folder}' ...\n")
+    schema_data = load_json(schema_file)
     for direct_dir, _, files_in_dir in Path(jsons_folder).walk():
         if files_in_dir:  # for each directory, there could be just directories inside
-            for n, json_file_name in enumerate(files_in_dir):
-                if n != 0 and n % 100 == 0:
-                    print(f"{n} files processed")
-                json_data = load_json(direct_dir / json_file_name)
-                schema_data = load_json(schema_file)
-
-                error_message = validate_json(json_file_name, json_data, schema_data)
-                if error_message is not None:
-                    error_messages.append(error_message)
+            for n, file_name in enumerate(files_in_dir):
+                if file_name.endswith(".json"):
+                    if n != 0 and n % 100 == 0:
+                        print(f"{n} files processed")
+                    json_data = load_json(direct_dir / file_name)
+                    error_message = validate_json(file_name, json_data, schema_data)
+                    if error_message is not None:
+                        error_messages.append(error_message)
 
     if error_messages:
         print_errors(error_messages)
