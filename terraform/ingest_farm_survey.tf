@@ -1,7 +1,7 @@
 locals {
   account_id                      = data.aws_caller_identity.current.account_id
   tif_to_jpg_lambda_name          = "dr2-farm-survey-tif-to-jpg"
-  source_jsons_bucket             = "dr2-farm-survey-jsons"
+  bucket_name                     = "dr2-farm-survey"
   jsons_to_validate_bucket_prefix = "jsons-to-validate"
   jsons_to_process_bucket_prefix  = "jsons-to-process"
   dev_bucket_sub_prefix           = "dev"
@@ -11,6 +11,7 @@ locals {
   farm_survey_s3_queue_name       = "dr2-farm-survey-tif-to-jpg-s3-put-events"
   dest_bucket_files_prefix        = "tna-digital-files-to-process"
   dest_records_prefix             = "tna-records-to-process"
+  tif_to_jpg_lambda_errors_prefix = "${local.jsons_to_process_bucket_prefix}/tif_to_jpg_lambda_errors"
   azure_container                 = "farms"
   lambda_timeout                  = 60
   python_runtime                  = "python3.14"
@@ -28,7 +29,6 @@ locals {
   container_login_cmd         = var.container_tool == "container" ? "${var.container_tool} registry" : var.container_tool
   container_push_and_tag_cmd  = var.container_tool == "container" ? "${var.container_tool} image" : var.container_tool
 
-  root_account     = "arn:aws:iam::${sensitive(local.account_id)}:root"
 }
 
 module "farm_survey_publisher_sso_policy" {
@@ -36,23 +36,15 @@ module "farm_survey_publisher_sso_policy" {
   name   = "AWSSSO_FarmSurveyPublisher"
   policy_string = templatefile("${path.module}/templates/iam_policy/farm_survey_publisher_policy.json.tpl", {
     account_id                      = local.account_id
-    source_jsons_bucket_name        = local.source_jsons_bucket
+    source_jsons_bucket_name        = local.bucket_name
     json_validation_lambda_name     = local.json_validation_lambda_name
   })
 }
 
 module "dr2_farm_survey_bucket" {
   source                   = "git::https://github.com/nationalarchives/da-terraform-modules//s3"
-  bucket_name              = local.source_jsons_bucket
+  bucket_name              = local.bucket_name
   bucket_versioning_status = "Disabled"
-
-  # Will uncomment this when I have confirmation that it works
-
-  # bucket_policy = templatefile("./templates/iam_policy/s3_cross_account_policy.json.tpl", {
-  #   source_jsons_bucket_name = local.source_jsons_bucket
-  #   root_account             = local.root_account
-  #   research_account         = local.research_account
-  # })
 }
 
 resource "aws_s3_object" "bucket_prefixes" {
@@ -61,7 +53,8 @@ resource "aws_s3_object" "bucket_prefixes" {
     local.jsons_to_process_bucket_prefix,
     "${local.jsons_to_process_bucket_prefix}/${local.dev_bucket_sub_prefix}",
     "${local.jsons_to_process_bucket_prefix}/${local.staging_bucket_sub_prefix}",
-    "${local.jsons_to_process_bucket_prefix}/${local.live_bucket_sub_prefix}"
+    "${local.jsons_to_process_bucket_prefix}/${local.live_bucket_sub_prefix}",
+    local.tif_to_jpg_lambda_errors_prefix
   ])
 
   bucket = module.dr2_farm_survey_bucket.s3_bucket_id
@@ -91,7 +84,7 @@ module "dr2_convert_tif_to_jpg_lambda" {
       account_id               = sensitive(local.account_id)
       lambda_name              = local.tif_to_jpg_lambda_name
       queue_name               = local.farm_survey_s3_queue_name
-      source_jsons_bucket_name = local.source_jsons_bucket
+      source_jsons_bucket_name = local.bucket_name
 
       buckets = jsonencode(flatten([
         [
@@ -116,16 +109,18 @@ module "dr2_convert_tif_to_jpg_lambda" {
   depends_on = [module.tif_to_jpg_lambda_repo]
 
   plaintext_env_vars = {
-    AZURE_ACCOUNT_URL          = var.azure_account_url
-    AZURE_CLIENT_ID            = var.azure_client_id
-    AZURE_FS_CONTAINER         = local.azure_container
-    AZURE_TENANT_ID            = var.azure_tenant_id
-    DEV_DEST_BUCKET            = var.dest_bucket_alias.dev
-    STAGING_DEST_BUCKET        = var.dest_bucket_alias.staging
-    LIVE_DEST_BUCKET           = var.dest_bucket_alias.live
-    DEST_BUCKET_FILES_PREFIX   = local.dest_bucket_files_prefix
-    DEST_BUCKET_RECORDS_PREFIX = local.dest_records_prefix
+    AZURE_ACCOUNT_URL           = var.azure_account_url
+    AZURE_CLIENT_ID             = var.azure_client_id
+    AZURE_FS_CONTAINER          = local.azure_container
+    AZURE_TENANT_ID             = var.azure_tenant_id
+    DEV_DEST_BUCKET             = var.dest_bucket_alias.dev
+    STAGING_DEST_BUCKET         = var.dest_bucket_alias.staging
+    LIVE_DEST_BUCKET            = var.dest_bucket_alias.live
+    DEST_BUCKET_FILES_PREFIX    = local.dest_bucket_files_prefix
+    DEST_BUCKET_RECORDS_PREFIX  = local.dest_records_prefix
+    SOURCE_BUCKET_ERRORS_PREFIX = local.tif_to_jpg_lambda_errors_prefix
   }
+  layers = [aws_lambda_layer_version.python_deps.arn]
 
   tags = {
     Name = local.tif_to_jpg_lambda_name
@@ -175,9 +170,9 @@ module "tif_to_jpg_queue" {
   delay_seconds = 90
   queue_name    = local.farm_survey_s3_queue_name
   sqs_policy = templatefile("./templates/sqs/sqs_access_policy.json.tpl", {
-    account_id = local.account_id,
-    queue_name = local.farm_survey_s3_queue_name
-    bucket_arn = module.dr2_farm_survey_bucket.s3_bucket_arn
+    account_id      = local.account_id,
+    queue_name      = local.farm_survey_s3_queue_name
+    bucket_arn      = module.dr2_farm_survey_bucket.s3_bucket_arn
     lambda_role_arn = module.dr2_convert_tif_to_jpg_lambda.lambda_role_arn
   })
   queue_cloudwatch_alarm_visible_messages_threshold = 60
@@ -264,13 +259,14 @@ module "dr2_preliminary_json_validation_lambda" {
   layers          = [aws_lambda_layer_version.python_deps.arn]
   policies = {
     "${local.json_validation_lambda_name}-policy" = templatefile("./templates/iam_policy/json_preliminary_validation_lambda_policy.json.tpl", {
-      source_jsons_bucket_name = local.source_jsons_bucket
+      source_jsons_bucket_name = local.bucket_name
+      lambda_errors_prefix     = local.tif_to_jpg_lambda_errors_prefix
       account_id               = sensitive(local.account_id)
     })
   }
 
   plaintext_env_vars = {
-    SOURCE_JSONS_BUCKET        = local.source_jsons_bucket
+    SOURCE_JSONS_BUCKET        = local.bucket_name
     SOURCE_JSONS_BUCKET_PREFIX = local.jsons_to_validate_bucket_prefix
   }
   tags = {
