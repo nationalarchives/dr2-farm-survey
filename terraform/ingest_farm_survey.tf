@@ -4,6 +4,7 @@ locals {
   bucket_name                     = "dr2-farm-survey"
   jsons_to_validate_bucket_prefix = "jsons-to-validate"
   jsons_to_process_bucket_prefix  = "jsons-to-process"
+  azure_blob_paths_bucket_prefix  = "blob_paths_in_azure"
   dev_bucket_sub_prefix           = "dev"
   staging_bucket_sub_prefix       = "staging"
   live_bucket_sub_prefix          = "live"
@@ -25,6 +26,8 @@ locals {
   validation_requirements_file        = "requirements-validation.txt"
   db_file                             = "farm-survey.db"
 
+  azure_blob_paths_db_lambda_name = "dr2-farm-survey-create-azure-blob-paths-db"
+
   tif_to_jpg_lambda_name_repo = "${local.tif_to_jpg_lambda_name}-repo"
   container_login_cmd         = var.container_tool == "container" ? "${var.container_tool} registry" : var.container_tool
   container_push_and_tag_cmd  = var.container_tool == "container" ? "${var.container_tool} image" : var.container_tool
@@ -38,7 +41,48 @@ module "farm_survey_publisher_sso_policy" {
     account_id                      = local.account_id
     source_jsons_bucket_name        = local.bucket_name
     json_validation_lambda_name     = local.json_validation_lambda_name
+    azure_blob_paths_db_lambda_name = local.azure_blob_paths_db_lambda_name
   })
+}
+
+data "archive_file" "azure_blob_paths_db_lambda" {
+  type        = "zip"
+  source_file = "${path.module}/../lambda_function_create_azure_blob_paths_db.py"
+  output_path = "${path.module}/azure_blob_paths_db_lambda_function_payload.zip"
+}
+
+module "dr2_create_azure_blob_paths_db_lambda" {
+  source          = "git::https://github.com/nationalarchives/da-terraform-modules//lambda"
+  filename        = data.archive_file.azure_blob_paths_db_lambda.output_path
+  description     = "A lambda function to create a DB of Azure blob (file) paths upload it to a bucket"
+  function_name   = local.azure_blob_paths_db_lambda_name
+  handler         = "lambda_function_create_azure_blob_paths_db.lambda_handler"
+  runtime         = local.python_runtime
+  timeout_seconds = 60 * 15
+  memory_size     = 512
+  storage_size    = 512
+  policies = {
+    "${local.azure_blob_paths_db_lambda_name}-policy" = templatefile("./templates/iam_policy/azure_paths_db_lambda_policy.json.tpl", {
+      account_id  = sensitive(local.account_id)
+      lambda_name = local.azure_blob_paths_db_lambda_name
+      bucket_name = local.bucket_name
+    })
+  }
+
+  plaintext_env_vars = {
+    AZURE_ACCOUNT_URL  = var.azure_account_url
+    AZURE_CLIENT_ID    = var.azure_client_id
+    AZURE_FS_CONTAINER = local.azure_container
+    AZURE_TENANT_ID    = var.azure_tenant_id
+    SOURCE_BUCKET      = local.bucket_name
+    BLOB_PATHS_PREFIX  = local.azure_blob_paths_bucket_prefix
+  }
+
+  layers = [aws_lambda_layer_version.python_deps.arn]
+
+  tags = {
+    Name = local.azure_blob_paths_db_lambda_name
+  }
 }
 
 module "dr2_farm_survey_bucket" {
@@ -49,6 +93,7 @@ module "dr2_farm_survey_bucket" {
 
 resource "aws_s3_object" "bucket_prefixes" {
   for_each = toset([
+    local.azure_blob_paths_bucket_prefix,
     local.jsons_to_validate_bucket_prefix,
     local.jsons_to_process_bucket_prefix,
     "${local.jsons_to_process_bucket_prefix}/${local.dev_bucket_sub_prefix}",
