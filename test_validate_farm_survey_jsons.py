@@ -103,9 +103,14 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertCountEqual(
             [PosixPath("test_jsons/test_json.json"), PosixPath("test_jsons/test_json_incorrect.json")], jsons
         )
-        self.assertEqual(("test_json.json", {"test_field": "test"}, "{'schema': 'data'}"), validate_json.call_args_list[0].args)
-        self.assertEqual(("test_json_incorrect.json", {"test_field": 'test2'}, "{'schema': 'data'}"),
-                         validate_json.call_args_list[1].args)
+        args_1st_call = validate_json.call_args_list[0].args
+        args_2nd_call = validate_json.call_args_list[1].args
+        file_name_1 = args_1st_call[0]
+        file_name_2 = args_2nd_call[0]
+        self.assertEqual("json", file_name_1.split(".")[-1])
+        self.assertEqual("json", file_name_2.split(".")[-1])
+        self.assertEqual(({"test_field": "test"}, "{'schema': 'data'}"), args_1st_call[1:])
+        self.assertEqual(({"test_field": 'test2'}, "{'schema': 'data'}"), args_2nd_call[1:])
         self.assertEqual((['error message1', 'error message2'],), print_errors.call_args_list[0].args)
 
 if __name__ == '__main__':

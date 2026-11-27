@@ -233,6 +233,21 @@ class TestLambdaFunction(unittest.TestCase):
         self.assertEqual("file1", container_client.get_blob_client.call_args[0][0])
         self.assertEqual(1, blob_client.download_blob.call_count)
 
+
+    def test_get_azure_file_stream_should_throw_an_exception_if_one_was_thrown_by_download_blob_method(self):
+        container_client = MagicMock()
+        blob_client = MagicMock()
+        blob_client.download_blob.side_effect = Exception("Download blob exception")
+        container_client.get_blob_client.return_value = blob_client
+
+        with self.assertRaises(Exception) as context:
+            file_stream = lambda_function.get_azure_file_stream(container_client, "file1")
+
+        self.assertEqual("Error getting stream for file1 from Azure blob container: Download blob exception", context.exception.args[0])
+        self.assertEqual(1, container_client.get_blob_client.call_count)
+        self.assertEqual("file1", container_client.get_blob_client.call_args[0][0])
+        self.assertEqual(1, blob_client.download_blob.call_count)
+
     @patch("lambda_function.Popen")
     def test_convert_to_jpg_should_return_jpg_bytes(self, popen):
         process = MagicMock()

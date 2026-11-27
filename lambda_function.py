@@ -100,7 +100,12 @@ def validate_metadata(all_image_metadata: list[dict[str, str]]):
 
 def get_azure_file_stream(container_client: ContainerClient, blob_path: str) -> StreamDownloader:
     blob_client = container_client.get_blob_client(blob_path)
-    return blob_client.download_blob()
+    try:
+        stream_downloader = blob_client.download_blob()
+    except Exception as err:
+        raise Exception(f"Error getting stream for {blob_path} from Azure blob container: {err}")
+
+    return stream_downloader
 
 
 def convert_to_jpg(jpg_reduction, tiff_stream: StreamDownloader) -> bytes:

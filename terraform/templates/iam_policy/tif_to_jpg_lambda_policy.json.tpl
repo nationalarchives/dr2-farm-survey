@@ -13,6 +13,16 @@
       ]
     },
     {
+      "Sid": "putObjectAtPrefix",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::${source_jsons_bucket_name}/${lambda_errors_prefix}/*"
+      ]
+    },
+    {
       "Sid": "writeAccess",
       "Effect": "Allow",
       "Action": [

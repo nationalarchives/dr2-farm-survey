@@ -130,6 +130,7 @@ module "dr2_convert_tif_to_jpg_lambda" {
       lambda_name              = local.tif_to_jpg_lambda_name
       queue_name               = local.farm_survey_s3_queue_name
       source_jsons_bucket_name = local.bucket_name
+      lambda_errors_prefix     = local.tif_to_jpg_lambda_errors_prefix
 
       buckets = jsonencode(flatten([
         [
